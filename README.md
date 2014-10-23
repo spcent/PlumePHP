@@ -34,11 +34,10 @@ PlumePHP是一个单文件PHP框架，适用于简单系统的快速开发，提
 只需增加3个文件，即可输出hello world。
 
 入口文件：index.php
-    <?php
 
+    <?php
     define('ENVIRONMENT', 'development');
     include __DIR__.'/Application/PlumePHP.class.php';
-
     // 这里可以动态增加全局配置信息
     $config = array('APP_PATH' => 'Application');
     PlumePHP::getInstance($config)->run();
