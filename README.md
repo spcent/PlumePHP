@@ -1,4 +1,4 @@
-PlumePHP - Just a single file php framework
+PlumePHP - Just a single file php framework（羽量级的单文件php开发框架）
 ========
 
 
@@ -9,7 +9,7 @@ PlumePHP是一个单文件PHP框架，适用于简单系统的快速开发，提
 
 ### 目录结构
 
-    ├── App                                 #业务代码文件夹，可在配置中指定路径
+    ├── Application                                 #业务代码文件夹，可在配置中指定路径
     │   ├── Controller                      #控制器文件夹
     │   │   └── IndexController.class.php
     │   ├── Lib                             #外部库
@@ -26,6 +26,10 @@ PlumePHP是一个单文件PHP框架，适用于简单系统的快速开发，提
     │   │       └── MenuWidget.php
     │   ├── common.php                      #一些共用函数
     |   └── PlumePHP.class.php              #PlumePHP核心文件
+    ├── public
+    │   ├── js
+    │   ├── images
+    │   └── css
     └── index.php                           #入口文件
     
 ### Hello World
