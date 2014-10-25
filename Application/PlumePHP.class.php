@@ -1,7 +1,7 @@
 <?php
-// sys init time
+// 系统初始时间
 $run_start_time = microtime(1);
-// db query count
+// 数据库查询次数
 $run_dbquery_count = 0;
 
 // 系统常量定义
