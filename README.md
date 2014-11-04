@@ -25,6 +25,7 @@ PlumePHP是一个单文件PHP框架，适用于简单系统的快速开发，提
     │   │   └── Tpl                         #widget模板文件夹
     │   │       └── MenuWidget.php
     │   ├── common.php                      #一些共用函数
+    |   ├── FlumePHP.class.php              #FlumePHP多app部署支持
     |   └── PlumePHP.class.php              #PlumePHP核心文件
     ├── public
     │   ├── js
