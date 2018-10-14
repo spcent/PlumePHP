@@ -1,0 +1,45 @@
+#!/usr/bin/env php
+<?php
+/**
+ * plume --module=hello --file=index --help --dest=/var/ -result1 -result2 --option mew arf moo -z
+ * Array(
+ * 	[commands] => Array(
+ *      [module] => hello
+ *      [file] => index
+ * 		[help] => 1
+ * 		[dest] => /var/
+ * 		[option] => mew arf moo
+ * 	)
+ * 	[flags] => Array(
+ * 		[0] => result1
+ * 		[1] => result2
+ * 		[2] => z
+ * 	)
+ * )
+*/
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+if (PHP_SAPI != 'cli') {
+    echo 'This script run only from the command line'.PHP_EOL;
+    exit(255);
+}
+
+if (PHP_SAPI == 'cli-server' && is_file(__DIR__.parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH))) {
+    return false;
+}
+
+// 加载框架文件
+include __DIR__ . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+
+// add core path
+PlumePHP::path(__DIR__ . DIRECTORY_SEPARATOR . 'core');
+
+// 启动应用程序
+try {
+    PlumePHP::run();
+} catch (Exception $e) {
+    // 全局异常处理
+    echo $e->getMessage(), PHP_EOL;
+    exit(255);
+}
