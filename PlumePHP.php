@@ -1652,9 +1652,6 @@ class PlumeEngine
             $user_func_data = call_user_func([$className, 'afterBiz'], $ar, $user_func_data);
         }
 
-        PlumeLog::debug('class name: '.$className.', func: '.$func.', request: '.$ar
-            .', response: '.json_encode($user_func_data, JSON_UNESCAPED_UNICODE));
-
         // 返回请求数据
         return $user_func_data;
     }
@@ -1811,6 +1808,7 @@ class PlumeEngine
 
         return $actionInstance->run($args);
     }
+
     // cli的参数处理
     protected function arguments($args)
     {
@@ -1865,11 +1863,12 @@ EOF;
         }
         return $ret;
     }
-    //缺省路由规则
+
+    // 缺省路由规则
     /*** 统一格式
-    http://your.domain.com[/file][/k/v...]
+    http://your.domain.com[/module][/file][/k/v...]
     说明：
-    1. file是对应的目录或文件（不带后缀）
+    1. module,file是对应的目录或文件（不带后缀）
     2. k为参数名，v为参数值，可重复，如：id/2/dir/xy 表示带2个参数： id=2 并且 dir=xy
     3. []中括号表示可有可无
     4. 没有对应的则匹配下一个
@@ -2819,25 +2818,39 @@ class PlumeViewObject
 /**
  * 日志类
  * 使用方法：PlumeLog::fatal('error msg');
- * 保存路径为 application/log，按天存放
- * fatal和warning会记录在.log.wf文件中
+ * 保存路径为 storage/log，按天存放
+ * fatal,error和warning会记录在.log.wf文件中
  */
 class PlumeLog
 {
     // 日志信息
     static protected $log = [];
+
     /**
      * 打日志，支持SAE环境
      * @param string $msg 日志内容
+     * @param array $context 用上下文信息替换记录信息中的占位符
      * @param string $level 日志等级
+     * @param bool $wf 是否记录到单独的wf日志中
      */
-    public static function write($msg, $level = 'DEBUG', $wf = false)
+    public static function write($msg, array $context = array(), $level = 'DEBUG', $wf = false)
     {
         if (is_array($msg)) {
             $msg = join("\n", $msg);
         }
 
-        $log_message = date('[ Y-m-d H:i:s ]') . "[{$level}]" . $msg . "\r\n";
+        if ($context) {
+            // 构建一个花括号包含的键名的替换数组
+            $replace = array();
+            foreach ($context as $key => $val) {
+                $replace['{' . $key . '}'] = $val;
+            }
+
+            // 替换记录信息中的占位符，最后返回修改后的记录信息。
+            $msg = strtr($msg, $replace);
+        }
+
+        $log_message = date('[ Y-m-d H:i:s ]') . "[{$level}]" . $msg . PHP_EOL;
         if ($wf) {
             $logPath = LOG_PATH . '/' . date('Ymd') . '.log.wf';
             file_put_contents($logPath, $log_message, FILE_APPEND | LOCK_EX);
@@ -2866,63 +2879,80 @@ class PlumeLog
     /**
      * 打印fatal日志
      * @param string $msg 日志信息
+     * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function fatal($msg)
+    public static function fatal($msg, array $context = array())
     {
-        self::write($msg, 'FATAL', true);
+        self::write($msg, $context, 'FATAL', true);
+    }
+
+    /**
+     * 打印error日志
+     * @param string $msg 日志信息
+     * @param array $context 用上下文信息替换记录信息中的占位符
+     */
+    public static function error($msg, array $context = array())
+    {
+        self::write($msg, $context, 'ERROR', true);
     }
 
     /**
      * 打印warning日志
      * @param string $msg 日志信息
+     * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function warn($msg)
+    public static function warn($msg, array $context = array())
     {
-        self::write($msg, 'WARN', true);
+        self::write($msg, $context, 'WARN', true);
     }
 
     /**
      * 打印notice日志
      * @param string $msg 日志信息
+     * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function notice($msg) 
+    public static function notice($msg, array $context = array()) 
     {
-        self::write($msg, 'NOTICE');
+        self::write($msg, $context, 'NOTICE');
     }
 
     /**
      * 打印info日志
      * @param string $msg 日志信息
+     * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function info($msg)
+    public static function info($msg, array $context = array())
     {
-        self::write($msg, 'INFO');
+        self::write($msg, $context, 'INFO');
     }
 
     /**
      * 打印debug日志
      * @param string $msg 日志信息
+     * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function debug($msg)
+    public static function debug($msg, array $context = array())
     {
-        self::write($msg, 'DEBUG');
+        self::write($msg, $context, 'DEBUG');
     }
 
     /**
      * 打印sql日志
      * @param string $msg 日志信息
+     * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function sql($msg)
+    public static function sql($msg, array $context = array())
     {
-        self::write($msg, 'SQL');
+        self::write($msg, $context, 'SQL');
     }
 
     /**
      * 打印event日志
      * @param string $msg 日志信息
+     * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function event($msg)
+    public static function event($msg, array $context = array())
     {
-        self::write($msg, "EVENT");
+        self::write($msg, $context, "EVENT");
     }
 }

@@ -1,0 +1,32 @@
+{
+  "name": "plume framework",
+  "description": "plume framework",
+  "keywords": ["laravel", "artisan", "dispatcher", "schedule", "cron"],
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "spcent",
+      "email": "spcent@qq.com",
+      "role": "Software Engineer"
+    }
+  ],
+  "require": {
+    "php": ">=5.4",
+    "qiniu/php-sdk": "^7.1",
+    "overtrue/wechat": "3.*",
+    "beberlei/assert": "^2.9",
+    "iamcal/php-emoji": "dev-master",
+    "matthiasmullie/minify": "^1.3"
+  },
+  "require-dev": {
+  },
+  "autoload": {
+    "classmap": [
+    ],
+    "psr-4": {
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}

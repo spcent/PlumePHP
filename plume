@@ -32,12 +32,9 @@ if (PHP_SAPI == 'cli-server' && is_file(__DIR__.parse_url($_SERVER['REQUEST_URI'
 // 加载框架文件
 include __DIR__ . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-// add core path
-PlumePHP::path(__DIR__ . DIRECTORY_SEPARATOR . 'core');
-
 // 启动应用程序
 try {
-    PlumePHP::run();
+    PlumePHP::app()->run();
 } catch (Exception $e) {
     // 全局异常处理
     echo $e->getMessage(), PHP_EOL;
