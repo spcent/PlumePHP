@@ -105,7 +105,7 @@ function I($path, $once = false)
  * @method  static stop() Stops the framework and sends a response.
  * @method  static halt($code = 200, $message = '') Stop the framework with an optional status code and message.
  * @method  static route($pattern, $callback) Maps a URL pattern to a callback.
- * @method  static render($file, [$data], [$key]) Renders a template file.
+ * @method  static render($file, [$data], [$key], [$layout]) Renders a template file.
  * @method  static error($exception) Sends an HTTP 500 response.
  * @method  static notFound() Sends an HTTP 404 response.
  * @method  static etag($id, [$type]) Performs ETag HTTP caching.
@@ -946,6 +946,7 @@ class PlumeView
      *
      * @param string $file Template file
      * @param array $data Template data
+     * @param string|false $layout layout file
      * @throws \Exception If template not found
      */
     public function render($file, $data = null, $layout = 'layout')
@@ -979,13 +980,14 @@ class PlumeView
      *
      * @param string $file Template file
      * @param array $data Template data
+     * @param string|false $layout layout file, default false
      * @return string Output of template
      */
-    public function fetch($file, $data = null)
+    public function fetch($file, $data = null, $layout = false)
     {
         ob_start();
 
-        $this->render($file, $data);
+        $this->render($file, $data, $layout);
         $output = ob_get_clean();
 
         return $output;
@@ -1430,7 +1432,7 @@ class PlumeEngine
     public function _halt($code = 200, $message = '')
     {
         if (PHP_SAPI == 'cli') {
-            echo date('H:i:s'), ', Msg:' . $msg, PHP_EOL;
+            echo date('H:i:s'), ', Msg:' . $message, PHP_EOL;
             exit(255);
         }
 
@@ -1500,14 +1502,15 @@ class PlumeEngine
      * @param string $file Template file
      * @param array $data Template data
      * @param string $key View variable name
+     * @param string|false $layout layout file, default false
      * @throws \Exception
      */
-    public function _render($file, $data = null, $key = null)
+    public function _render($file, $data = null, $key = null, $layout = false)
     {
         if ($key !== null) {
-            $this->view()->set($key, $this->view()->fetch($file, $data));
+            $this->view()->set($key, $this->view()->fetch($file, $data, $layout));
         } else {
-            $this->view()->render($file, $data);
+            $this->view()->render($file, $data, false, $layout);
         }
     }
 
@@ -1726,10 +1729,11 @@ class PlumeEngine
         }
 
         // session管理
-        if (C('USE_SESSION') == true && session_status() == PHP_SESSION_NONE) {
-            // session_id("plumessnid");
+        if (C('USE_SESSION') == true && session_status() == PHP_SESSION_NONE
+            && !headers_sent($filename, $linenum)) {
             session_start();
         }
+
         // 设置时区
         $timezone = C('TIME_ZONE');
         if (empty($timezone)) {
@@ -1783,7 +1787,8 @@ class PlumeEngine
 
         $file = 'index';
         if (!empty($args['commands']['file'])) {
-            $file = trim($args['commands']['file'], DS);
+            $file = str_replace(['\\', '/'], DS, $args['commands']['file']);
+            $file = trim($file, DS);
         }
 
         $filename = $file.'.cmd.php';
@@ -1796,7 +1801,7 @@ class PlumeEngine
         // 加载执行文件
         require($filename);
 
-        $className = $module.'_'.str_replace(DS, '_', $file).'_cmd';
+        $className = $module.'_'.str_replace(['\\', '/'], '_', $file).'_cmd';
         if (!class_exists($className)) {
             $this->_halt(404, '!!! 404 !!! class not exist: '.$className);
         }
