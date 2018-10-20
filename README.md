@@ -9,7 +9,7 @@ PlumePHP enables you to quickly and easily build RESTful web applications.
 ### 简介
 
 PlumePHP是一个单文件PHP框架，适用于简单系统的快速开发，提供了简单的路由方式，抛弃了坑爹的PHP模板，采用原生PHP语法来渲染页面。
-参考了SinglePHP[leo108](http://leo108.com)[Github](https://github.com/leo108/SinglePHP)和flight框架等。
+参考了SinglePHP[leo108](http://leo108.com)来自[Github](https://github.com/leo108/SinglePHP)和flight框架等。
 
 ## 入口文件：index.php
 
