@@ -11,6 +11,30 @@ PlumePHP enables you to quickly and easily build RESTful web applications.
 PlumePHP是一个单文件PHP框架，适用于简单系统的快速开发，提供了简单的路由方式，抛弃了坑爹的PHP模板，采用原生PHP语法来渲染页面。
 参考了[leo108](http://leo108.com)的SinglePHP，代码地址[Github](https://github.com/leo108/SinglePHP)和flight框架等。
 
+### 目录结构
+
+    ├── application                         # 业务代码文件夹，可在配置中指定路径
+    │   ├── web                             # web模块
+    |   |   ├──actions                      # web控制器
+    |   |   ├──views                        # 视图
+    |   |   └──console                      # cmd控制器
+    │   │   └── web.boot.php                # web启动文件
+    │   └── admin                           # admin模块
+    |       ├──actions                      # web控制器
+    |       ├──views                        # 视图
+    |       └──console                      # cmd控制器
+    │       └── admin.boot.php              # admin启动文件
+    ├── config
+    │   └── config.php                      # 全局配置文件（可选）
+    ├── tests                               # 单元测试（可选）
+    ├── storage                             # 运行生成文件存储目录（可选）
+    │   └── log                             # 日志目录（可选）
+    ├── public
+    │   └── index.php                       # 入口文件（必须）
+    ├── PlumePHP.php                        # PlumePHP核心文件（必须）
+    ├── common.php                          # 一些共用函数（可选）
+    └── plume                               # cmd命令行启动脚本（可选）
+
 ## 入口文件：index.php
 
 ```php
