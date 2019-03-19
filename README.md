@@ -16,6 +16,7 @@ PlumePHP是一个单文件PHP框架，适用于简单系统的快速开发，提
     ├── application                         # 业务代码文件夹，可在配置中指定路径
     │   ├── web                             # web模块
     |   |   ├──actions                      # web控制器
+    |   |   ├──biz                          # 业务逻辑
     |   |   ├──views                        # 视图
     |   |   └──console                      # cmd控制器
     │   │   └── web.boot.php                # web启动文件
@@ -41,19 +42,23 @@ PlumePHP是一个单文件PHP框架，适用于简单系统的快速开发，提
 // 加载框架文件
 include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
+$app = PlumePHP::app();
+
 // api首页展示
-PlumePHP::route('GET /api', function() {
+$app->route('GET /api', function() {
     header('Content-Type: text/html;charset=utf-8');
-    echo json_encode(['code'=>0, 'data'=>'api', 'msg'=>'success'], JSON_UNESCAPED_UNICODE);
+    json_output('success', 0, 'api', true);
+    return false;
 });
 
 // 通用的路由逻辑
-PlumePHP::route('*', function() {
-    PlumePHP::app()->run();
+$app->route('*', function() use ($app) {
+    $app->run();
+    return false;
 });
 
 // 启动
-PlumePHP::start();
+$app->start();
 ```
 
 ## 控制台cmd入口文件：plume
@@ -81,4 +86,30 @@ try {
     echo $e->getMessage(), PHP_EOL;
     exit(255);
 }
+```
+
+## 框架接口说明
+```php
+/*
+ * @method  static app() Gets the application object instance
+ * @method  static start() Starts the framework.
+ * @method  static path($path) Adds a path for autoloading classes.
+ * @method  static stop() Stops the framework and sends a response.
+ * @method  static halt($code = 200, $message = '') Stop the framework with an optional status code and message.
+ * @method  static route($pattern, $callback) Maps a URL pattern to a callback.
+ * @method  static render($file, [$data], [$key], [$layout]) Renders a template file.
+ * @method  static error($exception) Sends an HTTP 500 response.
+ * @method  static notFound() Sends an HTTP 404 response.
+ * @method  static json($data, [$code], [$encode], [$charset], [$option]) Sends a JSON response.
+ * @method  static jsonp($data, [$param], [$code], [$encode], [$charset], [$option]) Sends a JSONP response.
+ * @method  static map($name, $callback) Creates a custom framework method.
+ * @method  static register($name, $class, [$params], [$callback]) Registers a class to a framework method.
+ * @method  static before($name, $callback) Adds a filter before a framework method.
+ * @method  static after($name, $callback) Adds a filter after a framework method.
+ * @method  static get($key) Gets a variable.
+ * @method  static set($key, $value) Sets a variable.
+ * @method  static has($key) Checks if a variable is set.
+ * @method  static clear([$key]) Clears a variable.
+ * @method  static log($msg, array $context = array(), $level = 'DEBUG', $wf = false) logging.
+ */
 ```
