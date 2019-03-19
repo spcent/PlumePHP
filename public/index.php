@@ -11,16 +11,20 @@ if (!isset($_SERVER['HTTP_MOD_REWRITE'])) {
 // 加载框架文件
 include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
+$app = PlumePHP::app();
+
 // api首页展示
-PlumePHP::route('GET /api', function() {
+$app->route('GET /api', function() {
     header('Content-Type: text/html;charset=utf-8');
     json_output('success', 0, 'api', true);
+    return false;
 });
 
 // 通用的路由逻辑
-PlumePHP::route('*', function() {
-    PlumePHP::app()->run();
+$app->route('*', function() use ($app) {
+    $app->run();
+    return false;
 });
 
 // 启动
-PlumePHP::start();
+$app->start();
