@@ -4,29 +4,30 @@
  * 加速高性能现代WEB网站及WebApp应用的开发。
  */
 /**
- * index.php
+ * index.php参考代码
  * 
 // 加载框架文件
 include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
 // api首页展示
-PlumePHP::route('GET /api', function() {
+$app = PlumePHP::app();
+$app->route('GET /api', function() {
     header('Content-Type: text/html;charset=utf-8');
     echo json_encode(['code'=>0, 'data'=>'api', 'msg'=>'success'], JSON_UNESCAPED_UNICODE);
 });
 
-// 通用的路由逻辑
-PlumePHP::route('*', function() {
+// 通用的路由逻辑，如果只是写接口，可以不用框架自带MVC架构
+$app->route('*', function() {
     PlumePHP::app()->run();
 });
 
 // 启动
-PlumePHP::start();
+$app->start();
  */
-// 系统初始时间
-define('PLUME_START', microtime(true));
+define('PLUME_START_MEMORY',  memory_get_usage());
+define('PLUME_START_TIME', microtime(true));
 define('PLUME_CURRENT_TIME', time());
-define('PLUME_VERSION', '1.1.5');
+define('PLUME_VERSION', '1.1.6');
 defined('DS') or define('DS', DIRECTORY_SEPARATOR);
 defined('PLUME_PHP_PATH') OR define('PLUME_PHP_PATH', __DIR__);
 defined('VENDOR_PATH') OR define('VENDOR_PATH', PLUME_PHP_PATH.DS.'vendor'); // vendor第三方目录
@@ -97,9 +98,20 @@ function I($path, $once = false)
     }
 }
 /**
+ * 日志输出
+ * @param string $msg 日志内容
+ * @param array $context 用上下文信息替换记录信息中的占位符，默认为空
+ * @param string $level 日志等级，默认是DEBUG
+ * @param bool $wf 是否记录到单独的wf日志中，默认是false
+ */
+function L($msg, array $context = array(), $level = 'DEBUG', $wf = false) {
+    PlumePHP::app()->log($msg, $context, $level, $wf);
+}
+/**
  * The PlumePHP class is a static representation of the framework.
  *
  * Core.
+ * @method  static app() Gets the application object instance
  * @method  static start() Starts the framework.
  * @method  static path($path) Adds a path for autoloading classes.
  * @method  static stop() Stops the framework and sends a response.
@@ -108,8 +120,6 @@ function I($path, $once = false)
  * @method  static render($file, [$data], [$key], [$layout]) Renders a template file.
  * @method  static error($exception) Sends an HTTP 500 response.
  * @method  static notFound() Sends an HTTP 404 response.
- * @method  static etag($id, [$type]) Performs ETag HTTP caching.
- * @method  static lastModified($time) Performs last modified HTTP caching.
  * @method  static json($data, [$code], [$encode], [$charset], [$option]) Sends a JSON response.
  * @method  static jsonp($data, [$param], [$code], [$encode], [$charset], [$option]) Sends a JSONP response.
  * @method  static map($name, $callback) Creates a custom framework method.
@@ -120,14 +130,12 @@ function I($path, $once = false)
  * @method  static set($key, $value) Sets a variable.
  * @method  static has($key) Checks if a variable is set.
  * @method  static clear([$key]) Clears a variable.
- * @method  static init() Initializes the framework to its default settings.
- * @method  static app() Gets the application object instance
+ * @method  static log($msg, array $context = array(), $level = 'DEBUG', $wf = false) logging.
  */
 class PlumePHP
 {
     /**
      * Framework engine.
-     *
      * @var PlumeEngine
      */
     private static $engine;
@@ -139,7 +147,6 @@ class PlumePHP
 
     /**
      * Handles calls to static methods.
-     *
      * @param string $name Method name
      * @param array $params Method parameters
      * @return mixed Callback results
@@ -172,14 +179,12 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 {
     /**
      * Collection data.
-     *
      * @var array
      */
     private $data;
 
     /**
      * Constructor.
-     *
      * @param array $data Initial data
      */
     public function __construct(array $data = [])
@@ -222,7 +227,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Removes an item.
-     *
      * @param string $key Key
      */
     public function __unset($key)
@@ -232,7 +236,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Gets an item at the offset.
-     *
      * @param string $offset Offset
      * @return mixed Value
      */
@@ -243,7 +246,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Sets an item at the offset.
-     *
      * @param string $offset Offset
      * @param mixed $value Value
      */
@@ -258,7 +260,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Checks if an item exists at the offset.
-     *
      * @param string $offset Offset
      * @return bool Item status
      */
@@ -269,7 +270,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Removes an item at the offset.
-     *
      * @param string $offset Offset
      */
     public function offsetUnset($offset)
@@ -287,7 +287,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
  
     /**
      * Gets current collection item.
-     *
      * @return mixed Value
      */ 
     public function current()
@@ -297,7 +296,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
  
     /**
      * Gets current collection key.
-     *
      * @return mixed Value
      */ 
     public function key()
@@ -307,7 +305,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
  
     /**
      * Gets the next collection value.
-     *
      * @return mixed Value
      */ 
     public function next() 
@@ -317,7 +314,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
  
     /**
      * Checks if the current collection key is valid.
-     *
      * @return bool Key status
      */ 
     public function valid()
@@ -328,7 +324,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Gets the size of the collection.
-     *
      * @return int Collection size
      */
     public function count()
@@ -338,7 +333,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Gets the item keys.
-     *
      * @return array Collection keys
      */
     public function keys()
@@ -348,7 +342,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Gets the collection data.
-     *
      * @return array Collection data
      */
     public function getData()
@@ -358,7 +351,6 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
 
     /**
      * Sets the collection data.
-     *
      * @param array $data New collection data
      */
     public function setData(array $data)
@@ -384,21 +376,18 @@ class PlumeLoader
 {
     /**
      * Registered classes.
-     *
      * @var array
      */
     protected $classes = [];
 
     /**
      * Class instances.
-     *
      * @var array
      */
     protected $instances = [];
 
     /**
      * Autoload directories.
-     *
      * @var array
      */
     protected static $dirs = [];
@@ -418,7 +407,6 @@ class PlumeLoader
 
     /**
      * Registers a class.
-     *
      * @param string $name Registry name
      * @param string|callable $class Class name or function to instantiate class
      * @param array $params Class initialization parameters
@@ -432,7 +420,6 @@ class PlumeLoader
 
     /**
      * Unregisters a class.
-     *
      * @param string $name Registry name
      */
     public function unregister($name)
@@ -442,7 +429,6 @@ class PlumeLoader
 
     /**
      * Loads a registered class.
-     *
      * @param string $name Method name
      * @param bool $shared Shared instance
      * @return object Class instance
@@ -485,7 +471,6 @@ class PlumeLoader
 
     /**
      * Gets a new instance of a class.
-     *
      * @param string|callable $class Class name or callback function to instantiate class
      * @param array $params Class initialization parameters
      * @return object Class instance
@@ -542,7 +527,6 @@ class PlumeLoader
 
     /**
      * Starts/stops autoloader.
-     *
      * @param bool $enabled Enable/disable autoloading
      * @param array $dirs Autoload directories
      */
@@ -561,7 +545,6 @@ class PlumeLoader
 
     /**
      * Autoloads classes.
-     *
      * @param string $class Class name
      */
     public static function loadClass($class)
@@ -578,7 +561,6 @@ class PlumeLoader
 
     /**
      * Adds a directory for autoloading classes.
-     *
      * @param mixed $dir Directory path
      */
     public static function addDirectory($dir)
@@ -636,7 +618,6 @@ class PlumeRoute
 
     /**
      * Constructor.
-     *
      * @param string $pattern URL pattern
      * @param mixed $callback Callback function
      * @param array $methods HTTP methods
@@ -652,7 +633,6 @@ class PlumeRoute
 
     /**
      * Checks if a URL matches the route pattern. Also parses named parameters in the URL.
-     *
      * @param string $url Requested URL
      * @param boolean $case_sensitive Case sensitive matching
      * @return boolean Match status
@@ -716,7 +696,6 @@ class PlumeRoute
 
     /**
      * Checks if an HTTP method matches the route methods.
-     *
      * @param string $method HTTP method
      * @return bool Match status
      */
@@ -734,14 +713,12 @@ class PlumeRouter
 {
     /**
      * Mapped routes.
-     *
      * @var array
      */
     protected $routes = [];
 
     /**
      * Pointer to current route.
-     *
      * @var int
      */
     protected $index = 0;
@@ -755,7 +732,6 @@ class PlumeRouter
 
     /**
      * Gets mapped routes.
-     *
      * @return array Array of routes
      */
     public function getRoutes()
@@ -773,7 +749,6 @@ class PlumeRouter
 
     /**
      * Maps a URL pattern to a callback function.
-     *
      * @param string $pattern URL pattern to match
      * @param callback $callback Callback function
      * @param boolean $pass_route Pass the matching route object to the callback
@@ -792,14 +767,14 @@ class PlumeRouter
 
     /**
      * Routes the current request.
-     *
      * @param PlumeRequest $request PlumeRequest object
      * @return PlumeRoute|bool Matching route or false if no match
      */
     public function route(PlumeRequest $request)
     {
         while ($route = $this->current()) {
-            if ($route !== false && $route->matchMethod($request->method) && $route->matchUrl($request->url, $this->case_sensitive)) {
+            if ($route !== false && $route->matchMethod($request->method)
+                && $route->matchUrl($request->url, $this->case_sensitive)) {
                 return $route;
             }
             $this->next();
@@ -810,7 +785,6 @@ class PlumeRouter
 
     /**
      * Gets the current route.
-     *
      * @return PlumeRoute
      */
     public function current()
@@ -820,7 +794,6 @@ class PlumeRouter
 
     /**
      * Gets the next route.
-     *
      * @return PlumeRoute
      */
     public function next()
@@ -831,56 +804,49 @@ class PlumeRouter
     /**
      * Reset to the first route.
      */
-    public  function reset()
+    public function reset()
     {
         $this->index = 0;
     }
 }
 /**
  * The PlumeView class represents output to be displayed. It provides
- * methods for managing view data and inserts the data into
- * view templates upon rendering.
+ * methods for managing view data and inserts the data into view templates upon rendering.
  */
 class PlumeView
 {
     /**
      * Location of view templates.
-     *
      * @var string
      */
     public $path;
 
     /**
      * File extension.
-     *
      * @var string
      */
     public $extension = '.tpl.php';
 
     /**
      * Theme
-     * 
      * @var string
      */
     public $theme = 'default';
 
     /**
      * View variables.
-     *
      * @var array
      */
     protected $vars = [];
 
     /**
      * Template file.
-     *
      * @var string
      */
     private $template;
 
     /**
      * Constructor.
-     *
      * @param string $path Path to templates directory
      */
     public function __construct($path = '.')
@@ -890,7 +856,6 @@ class PlumeView
 
     /**
      * Gets a template variable.
-     *
      * @param string $key Key
      * @return mixed Value
      */
@@ -901,7 +866,6 @@ class PlumeView
 
     /**
      * Sets a template variable.
-     *
      * @param mixed $key Key
      * @param string $value Value
      */
@@ -918,7 +882,6 @@ class PlumeView
 
     /**
      * Checks if a template variable is set.
-     *
      * @param string $key Key
      * @return boolean If key exists
      */
@@ -929,7 +892,6 @@ class PlumeView
 
     /**
      * Unsets a template variable. If no key is passed in, clear all variables.
-     *
      * @param string $key Key
      */
     public function clear($key = null)
@@ -943,7 +905,6 @@ class PlumeView
 
     /**
      * Renders a template.
-     *
      * @param string $file Template file
      * @param array $data Template data
      * @param string|false $layout layout file
@@ -977,7 +938,6 @@ class PlumeView
 
     /**
      * Gets the output of a template.
-     *
      * @param string $file Template file
      * @param array $data Template data
      * @param string|false $layout layout file, default false
@@ -989,13 +949,11 @@ class PlumeView
 
         $this->render($file, $data, $layout);
         $output = ob_get_clean();
-
         return $output;
     }
 
     /**
      * Checks if a template file exists.
-     *
      * @param string $file Template file
      * @return bool Template file exists
      */
@@ -1006,7 +964,6 @@ class PlumeView
 
     /**
      * Gets the full path to a template file.
-     *
      * @param string $file Template file
      * @return string Template file location
      */
@@ -1026,7 +983,6 @@ class PlumeView
 
     /**
      * Displays escaped output.
-     *
      * @param string $str String to escape
      * @return string Escaped string
      */
@@ -1075,21 +1031,18 @@ class PlumeEngine
 {
     /**
      * Stored variables.
-     *
      * @var array
      */
     protected $vars;
 
     /**
      * Class loader.
-     *
      * @var PlumeLoader
      */
     protected $loader;
 
     /**
      * Event dispatcher.
-     *
      * @var PlumeEvent
      */
     protected $dispatcher;
@@ -1110,7 +1063,6 @@ class PlumeEngine
 
     /**
      * Handles calls to class methods.
-     *
      * @param string $name Method name
      * @param array $params Method parameters
      * @return mixed Callback results
@@ -1151,6 +1103,7 @@ class PlumeEngine
         $this->loader->register('request', 'PlumeRequest');
         $this->loader->register('response', 'PlumeResponse');
         $this->loader->register('router', 'PlumeRouter');
+        $this->loader->register('logger', 'PlumeLogger');
         $this->loader->register('view', 'PlumeView', [], function($view) use ($self) {
             $view->path = $self->get('plumephp.views.path');
             $view->extension = $self->get('plumephp.views.extension');
@@ -1159,7 +1112,7 @@ class PlumeEngine
         // Register framework methods
         $methods = [
             'start', 'stop', 'route', 'halt', 'error', 'notFound', 'biz',
-            'render', 'etag', 'lastModified', 'json', 'jsonp'
+            'render', 'json', 'jsonp', 'log'
         ];
         foreach ($methods as $name) {
             $this->dispatcher->set($name, [$this, '_'.$name]);
@@ -1193,7 +1146,6 @@ class PlumeEngine
 
     /**
      * Custom error handler. Converts errors into exceptions.
-     *
      * @param int $errno Error number
      * @param int $errstr Error string
      * @param int $errfile Error file name
@@ -1209,7 +1161,6 @@ class PlumeEngine
 
     /**
      * Custom exception handler. Logs exceptions.
-     *
      * @param \Exception $e Thrown exception
      */
     public function handleException($e)
@@ -1222,7 +1173,6 @@ class PlumeEngine
 
     /**
      * Maps a callback to a framework method.
-     *
      * @param string $name Method name
      * @param callback $callback Callback function
      * @throws \Exception If trying to map over a framework method
@@ -1237,7 +1187,6 @@ class PlumeEngine
 
     /**
      * Registers a class to a framework method.
-     *
      * @param string $name Method name
      * @param string $class Class name
      * @param array $params Class initialization parameters
@@ -1255,7 +1204,6 @@ class PlumeEngine
 
     /**
      * Adds a pre-filter to a method.
-     *
      * @param string $name Method name
      * @param callback $callback Callback function
      */
@@ -1266,7 +1214,6 @@ class PlumeEngine
 
     /**
      * Adds a post-filter to a method.
-     *
      * @param string $name Method name
      * @param callback $callback Callback function
      */
@@ -1277,7 +1224,6 @@ class PlumeEngine
 
     /**
      * Gets a variable.
-     *
      * @param string $key Key
      * @return mixed
      */
@@ -1289,7 +1235,6 @@ class PlumeEngine
 
     /**
      * Sets a variable.
-     *
      * @param mixed $key Key
      * @param string $value Value
      */
@@ -1306,7 +1251,6 @@ class PlumeEngine
 
     /**
      * Checks if a variable has been set.
-     *
      * @param string $key Key
      * @return bool Variable status
      */
@@ -1317,7 +1261,6 @@ class PlumeEngine
 
     /**
      * Unsets a variable. If no key is passed in, clear all variables.
-     *
      * @param string $key Key
      */
     public function clear($key = null)
@@ -1331,7 +1274,6 @@ class PlumeEngine
 
     /**
      * Adds a path for class autoloading.
-     *
      * @param string $dir Directory path
      */
     public function path($dir)
@@ -1394,7 +1336,6 @@ class PlumeEngine
 
     /**
      * Stops the framework and outputs the current response.
-     *
      * @param int $code HTTP status code
      * @throws \Exception
      */
@@ -1413,7 +1354,6 @@ class PlumeEngine
 
     /**
      * Routes a URL to a callback function.
-     *
      * @param string $pattern URL pattern to match
      * @param callback $callback Callback function
      * @param boolean $pass_route Pass the matching route object to the callback
@@ -1425,7 +1365,6 @@ class PlumeEngine
 
     /**
      * Stops processing and returns a given response.
-     *
      * @param int $code HTTP status code
      * @param string $message Response message
      */
@@ -1446,11 +1385,14 @@ class PlumeEngine
 
     /**
      * Sends an HTTP 500 response for any errors.
-     *
      * @param \Exception|\Throwable $e Thrown exception
      */
     public function _error($e)
     {
+        $this->_log('Msg: '.$e->getMessage().
+            ', Code: '.$e->getCode().
+            ', Trace: \n'.$e->getTraceAsString(), [], 'ERROR', true);
+
         if ($this->get('plumephp.env') == 'production') {
             $msg = sprintf('<h1>500 Internal Server Error</h1>'.
                 '<h3>%s (%s)</h3>',
@@ -1498,7 +1440,6 @@ class PlumeEngine
 
     /**
      * Renders a template.
-     *
      * @param string $file Template file
      * @param array $data Template data
      * @param string $key View variable name
@@ -1516,7 +1457,6 @@ class PlumeEngine
 
     /**
      * Sends a JSON response.
-     *
      * @param mixed $data JSON data
      * @param int $code HTTP status code
      * @param bool $encode Whether to perform JSON encoding
@@ -1542,7 +1482,6 @@ class PlumeEngine
 	
     /**
      * Sends a JSONP response.
-     *
      * @param mixed $data JSON data
      * @param string $param Query parameter that specifies the callback name.
      * @param int $code HTTP status code
@@ -1567,36 +1506,6 @@ class PlumeEngine
             ->header('Content-Type', 'application/javascript; charset='.$charset)
             ->write($callback.'('.$json.');')
             ->send();
-    }
-
-    /**
-     * Handles ETag HTTP caching.
-     *
-     * @param string $id ETag identifier
-     * @param string $type ETag type
-     */
-    public function _etag($id, $type = 'strong')
-    {
-        $id = (($type === 'weak') ? 'W/' : '').$id;
-        $this->response()->header('ETag', $id);
-        if (isset($_SERVER['HTTP_IF_NONE_MATCH']) &&
-            $_SERVER['HTTP_IF_NONE_MATCH'] === $id) {
-            $this->_halt(304);
-        }
-    }
-
-    /**
-     * Handles last modified HTTP caching.
-     *
-     * @param int $time Unix timestamp
-     */
-    public function _lastModified($time)
-    {
-        $this->response()->header('Last-Modified', gmdate('D, d M Y H:i:s \G\M\T', $time));
-        if (isset($_SERVER['HTTP_IF_MODIFIED_SINCE']) &&
-            strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) === $time) {
-            $this->_halt(304);
-        }
     }
 
     /**
@@ -1660,40 +1569,32 @@ class PlumeEngine
     }
 
     /**
+     * 日志输出
+     * @param string $msg 日志内容
+     * @param array $context 用上下文信息替换记录信息中的占位符，默认为空
+     * @param string $level 日志等级，默认是DEBUG
+     * @param bool $wf 是否记录到单独的wf日志中，默认是false
+     */
+    public function _log($msg, array $context = array(), $level = 'DEBUG', $wf = false) {
+        $this->logger()->write($msg, $context, $level, $wf);
+    }
+
+    /**
      * boot
      */
     protected function boot()
     {
-        /*
-         *---------------------------------------------------------------
-         * APPLICATION ENVIRONMENT
-         *---------------------------------------------------------------
-         *
-         * You can load different configurations depending on your
-         * current environment. Setting the environment also influences
-         * things like logging and error reporting.
-         *
-         * This can be set to anything, but default usage is:
-         *
-         *     development
-         *     testing
-         *     production
-         *
-         * NOTE: If you change these, also change the error_reporting() code below
-         */
         $env = get_cfg_var("plumephp.env") ? get_cfg_var("plumephp.env") : 'development';
         switch ($env) {
         case 'development':
             error_reporting(-1);
             ini_set('display_errors', 1);
             break;
-
         case 'testing':
         case 'production':
             ini_set('display_errors', 0);
             error_reporting(-1);
             break;
-
         default:
             $this->_halt(503, 'The application environment is not set correctly.');
         }
@@ -1710,7 +1611,7 @@ class PlumeEngine
         defined('PUBLIC_PATH') OR define('PUBLIC_PATH', PLUME_PHP_PATH.DS.'public'); // public对外访问的目录
         defined('IS_CLI') OR define('IS_CLI', PHP_SAPI=='cli' ? 1 : 0);
         if (!IS_CLI) {
-            defined('SITE_DOMAIN') OR define('SITE_DOMAIN', strip_tags($_SERVER['HTTP_HOST']));
+            defined('SITE_DOMAIN') OR define('SITE_DOMAIN', isset($_SERVER['HTTP_HOST']) ? strip_tags($_SERVER['HTTP_HOST']) : '');
             defined('IS_GET') OR define('IS_GET', $_SERVER['REQUEST_METHOD'] =='GET' ? true : false);
             defined('IS_POST') OR define('IS_POST', $_SERVER['REQUEST_METHOD'] =='POST' ? true : false);
             defined('IS_AJAX') OR define('IS_AJAX', (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') ? true : false);
@@ -1752,10 +1653,8 @@ class PlumeEngine
                 if (IS_CLI) {
                     echo $msg, PHP_EOL;
                 }
-                PlumeLog::fatal($msg);
+                L($msg, [], 'FATAL', true);
             }
-            // 日志记录
-            PlumeLog::save();
         });
     }
 
@@ -1839,9 +1738,10 @@ class PlumeEngine
                 $ret['flags'][] = $flag;
                 // 对于版本命令的特殊处理
                 if ($flag == 'version' || $flag == 'v') {
-                    echo 'Plume version: '.PLUME_VERSION.PHP_EOL;
-                    exit;
-                } else if ($flag == 'h' || $flag == 'help') {
+                    $this->_halt(200, 'Plume version: '.PLUME_VERSION);
+                }
+
+                if ($flag == 'h' || $flag == 'help') {
                     $str = <<<EOF
 Example:
 plume --module=user --file=index --dest=/var/ -result1 -result2 --option mew arf moo -z
@@ -1861,8 +1761,7 @@ Array(
     )
 )
 EOF;
-    echo $str.PHP_EOL;
-    exit;
+                    $this->_halt(200, $str);
                 }
             }
         }
@@ -1878,7 +1777,6 @@ EOF;
     3. []中括号表示可有可无
     4. 没有对应的则匹配下一个
     5. 没有file时缺省对应index.php，有则对应file.php
-    6. 系统保留目录：att附件 log日志 biz业务模块 model模型 tool工具
     */
     protected function runWeb()
     {
@@ -2097,7 +1995,6 @@ class PlumeRequest
 
     /**
      * Constructor.
-     *
      * @param array $config Request configuration
      */
     public function __construct($config = [])
@@ -2129,7 +2026,6 @@ class PlumeRequest
 
     /**
      * Initialize request properties.
-     *
      * @param array $properties Array of request properties
      */
     public function init($properties = [])
@@ -2167,7 +2063,6 @@ class PlumeRequest
 
     /**
      * Gets the body of the request.
-     *
      * @return string Raw HTTP request body
      */
     public static function getBody()
@@ -2187,7 +2082,6 @@ class PlumeRequest
 
     /**
      * Gets the request method.
-     *
      * @return string
      */
     public static function getMethod()
@@ -2204,7 +2098,6 @@ class PlumeRequest
 
     /**
      * Gets a variable from $_SERVER using $default if not provided.
-     *
      * @param string $var Variable name
      * @param string $default Default value to substitute
      * @return string Server variable value
@@ -2216,7 +2109,6 @@ class PlumeRequest
 
     /**
      * Parse query parameters from a URL.
-     *
      * @param string $url URL string
      * @return array Query parameters
      */
@@ -2355,7 +2247,6 @@ class PlumeResponse
 
     /**
      * Sets the HTTP status of the response.
-     *
      * @param int $code HTTP status code.
      * @return object|int Self reference
      * @throws \Exception If invalid status code
@@ -2377,7 +2268,6 @@ class PlumeResponse
 
     /**
      * Adds a header to the response.
-     *
      * @param string|array $name Header name or array of names and values
      * @param string $value Header value
      * @return object Self reference
@@ -2405,7 +2295,6 @@ class PlumeResponse
 
     /**
      * Writes content to the response body.
-     *
      * @param string $str Response content
      * @return object Self reference
      */
@@ -2417,7 +2306,6 @@ class PlumeResponse
 
     /**
      * Clears the response.
-     *
      * @return object Self reference
      */
     public function clear()
@@ -2430,7 +2318,6 @@ class PlumeResponse
 
     /**
      * Sets caching headers for the response.
-     *
      * @param int|string $expires Expiration time
      * @return object Self reference
      */
@@ -2457,7 +2344,6 @@ class PlumeResponse
 
     /**
      * Sends HTTP headers.
-     *
      * @return object Self reference
      */
     public function sendHeaders()
@@ -2503,7 +2389,6 @@ class PlumeResponse
 
     /**
      * Gets the content length.
-     *
      * @return string Content length
      */
     public function getContentLength()
@@ -2561,7 +2446,6 @@ class PlumeEvent
 
     /**
      * Dispatches an event.
-     *
      * @param string $name Event name
      * @param array $params Callback parameters
      * @return string Output of callback
@@ -2589,7 +2473,6 @@ class PlumeEvent
 
     /**
      * Assigns a callback to an event.
-     *
      * @param string $name Event name
      * @param callback $callback Callback function
      */
@@ -2600,7 +2483,6 @@ class PlumeEvent
 
     /**
      * Gets an assigned callback.
-     *
      * @param string $name Event name
      * @return callback $callback Callback function
      */
@@ -2611,7 +2493,6 @@ class PlumeEvent
 
     /**
      * Checks if an event has been set.
-     *
      * @param string $name Event name
      * @return bool Event status
      */
@@ -2623,7 +2504,6 @@ class PlumeEvent
     /**
      * Clears an event. If no name is given,
      * all events are removed.
-     *
      * @param string $name Event name
      */
     public function clear($name = null)
@@ -2639,7 +2519,6 @@ class PlumeEvent
 
     /**
      * Hooks a callback to an event.
-     *
      * @param string $name Event name
      * @param string $type Filter type
      * @param callback $callback Callback function
@@ -2651,7 +2530,6 @@ class PlumeEvent
 
     /**
      * Executes a chain of method filters.
-     *
      * @param array $filters Chain of filters
      * @param array $params Method parameters
      * @param mixed $output Method output
@@ -2668,7 +2546,6 @@ class PlumeEvent
 
     /**
      * Executes a callback function.
-     *
      * @param callback $callback Callback function
      * @param array $params Function parameters
      * @return mixed Function results
@@ -2687,7 +2564,6 @@ class PlumeEvent
 
     /**
      * Calls a function.
-     *
      * @param string $func Name of function to call
      * @param array $params Function parameters
      * @return mixed Function results
@@ -2719,7 +2595,6 @@ class PlumeEvent
 
     /**
      * Invokes a method.
-     *
      * @param mixed $func Class method
      * @param array $params Class method parameters
      * @return mixed Function results
@@ -2822,14 +2697,28 @@ class PlumeViewObject
 }
 /**
  * 日志类
- * 使用方法：PlumeLog::fatal('error msg');
  * 保存路径为 storage/log，按天存放
  * fatal,error和warning会记录在.log.wf文件中
  */
-class PlumeLog
+class PlumeLogger
 {
     // 日志信息
-    static protected $log = [];
+    protected $log = [];
+    // 日志id
+    protected $logId = '';
+    // 日志目录
+    protected $logPath = '';
+
+    public function __construct($logId = '', $logPath = '')
+    {
+        $this->logId = $logId;
+        $this->logPath = $logPath;
+    }
+
+    public function __destruct()
+    {
+        $this->save();
+    }
 
     /**
      * 打日志，支持SAE环境
@@ -2838,8 +2727,12 @@ class PlumeLog
      * @param string $level 日志等级
      * @param bool $wf 是否记录到单独的wf日志中
      */
-    public static function write($msg, array $context = array(), $level = 'DEBUG', $wf = false)
+    public function write($msg, array $context = array(), $level = 'DEBUG', $wf = false)
     {
+        if (empty($msg)) {
+            return;
+        }
+
         if (is_array($msg)) {
             $msg = join("\n", $msg);
         }
@@ -2855,12 +2748,16 @@ class PlumeLog
             $msg = strtr($msg, $replace);
         }
 
-        $log_message = date('[ Y-m-d H:i:s ]') . "[{$level}]" . $msg . PHP_EOL;
+        if (empty($this->logId)) {
+            $this->logId = sprintf('%x', (intval(microtime(true) * 10000) % 864000000) * 10000 + mt_rand(0, 9999));
+        }
+
+        $log_message = date('[ Y-m-d H:i:s ]') . '['.$this->logId.']' . "[{$level}]" . $msg . PHP_EOL;
         if ($wf) {
-            $logPath = LOG_PATH . '/' . date('Ymd') . '.log.wf';
+            $logPath = $this->logPath ? $this->logPath : LOG_PATH . '/' . date('Ymd') . '.log.wf';
             file_put_contents($logPath, $log_message, FILE_APPEND | LOCK_EX);
         } else {
-            self::$log[] = $log_message;
+            $this->log[] = $log_message;
         }
     }
 
@@ -2870,15 +2767,15 @@ class PlumeLog
      * @access public
      * @return void
      */
-    public static function save()
+    public function save()
     {
-        if (empty(self::$log)) return;
+        if (empty($this->log)) return;
 
-        $msg = implode('', self::$log);
-        $logPath = LOG_PATH . '/' . date('Ymd') . '.log';
+        $msg = implode('', $this->log);
+        $logPath = $this->logPath ? $this->logPath : LOG_PATH . '/' . date('Ymd') . '.log';
         file_put_contents($logPath, $msg, FILE_APPEND | LOCK_EX);
         // 保存后清空日志缓存
-        self::$log = [];
+        $this->log = [];
     }
 
     /**
@@ -2886,9 +2783,9 @@ class PlumeLog
      * @param string $msg 日志信息
      * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function fatal($msg, array $context = array())
+    public function fatal($msg, array $context = array())
     {
-        self::write($msg, $context, 'FATAL', true);
+        $this->write($msg, $context, 'FATAL', true);
     }
 
     /**
@@ -2896,9 +2793,9 @@ class PlumeLog
      * @param string $msg 日志信息
      * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function error($msg, array $context = array())
+    public function error($msg, array $context = array())
     {
-        self::write($msg, $context, 'ERROR', true);
+        $this->write($msg, $context, 'ERROR', true);
     }
 
     /**
@@ -2906,9 +2803,9 @@ class PlumeLog
      * @param string $msg 日志信息
      * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function warn($msg, array $context = array())
+    public function warn($msg, array $context = array())
     {
-        self::write($msg, $context, 'WARN', true);
+        $this->write($msg, $context, 'WARN', true);
     }
 
     /**
@@ -2916,9 +2813,9 @@ class PlumeLog
      * @param string $msg 日志信息
      * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function notice($msg, array $context = array()) 
+    public function notice($msg, array $context = array()) 
     {
-        self::write($msg, $context, 'NOTICE');
+        $this->write($msg, $context, 'NOTICE');
     }
 
     /**
@@ -2926,9 +2823,9 @@ class PlumeLog
      * @param string $msg 日志信息
      * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function info($msg, array $context = array())
+    public function info($msg, array $context = array())
     {
-        self::write($msg, $context, 'INFO');
+        $this->write($msg, $context, 'INFO');
     }
 
     /**
@@ -2936,9 +2833,9 @@ class PlumeLog
      * @param string $msg 日志信息
      * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function debug($msg, array $context = array())
+    public function debug($msg, array $context = array())
     {
-        self::write($msg, $context, 'DEBUG');
+        $this->write($msg, $context, 'DEBUG');
     }
 
     /**
@@ -2946,18 +2843,8 @@ class PlumeLog
      * @param string $msg 日志信息
      * @param array $context 用上下文信息替换记录信息中的占位符
      */
-    public static function sql($msg, array $context = array())
+    public function sql($msg, array $context = array())
     {
-        self::write($msg, $context, 'SQL');
-    }
-
-    /**
-     * 打印event日志
-     * @param string $msg 日志信息
-     * @param array $context 用上下文信息替换记录信息中的占位符
-     */
-    public static function event($msg, array $context = array())
-    {
-        self::write($msg, $context, "EVENT");
+        $this->write($msg, $context, 'SQL');
     }
 }
