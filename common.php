@@ -17,7 +17,7 @@ if (!function_exists('json_format')) {
     {
         if (!is_string($json)) {
             if (phpversion() && phpversion() >= 5.4) {
-                return json_encode($json, JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE);
+                return json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
             }
             $json = json_encode($json, JSON_UNESCAPED_UNICODE);
         }
@@ -95,11 +95,11 @@ if (!function_exists('json_output')) {
     // 异步输出结果,0表示成功，非0表示失败
     function json_output($msg, $code = 0, $data = '', $is_format = false)
     {
-        $res = ['code'=>$code, 'msg'=>$msg, 'data'=>$data];
+        $res = ['code' => $code, 'msg' => $msg, 'data' => $data];
         if ($is_format) {
-            echo '<pre>'.json_format($res).'</pre>';
+            echo '<pre>' . json_format($res) . '</pre>';
         } else {
-            echo json_encode($res, JSON_UNESCAPED_UNICODE);
+            echo json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
     }
 }
@@ -107,54 +107,54 @@ if (!function_exists('json_output')) {
 if (!function_exists('curl_get_contents')) {
     // 基于curl的file_get_contents
     function curl_get_contents(
-            $url,
-            array $post_data = [],
-            $verbose = false,
-            $ref_url = false,
-            $cookie_location = false,
-            $return_transfer = true)
-    {
-    	$ch = curl_init();
-    	curl_setopt($ch, CURLOPT_URL, $url);
-    	curl_setopt($ch, CURLOPT_TIMEOUT, 40);
-    	curl_setopt($ch, CURLOPT_RETURNTRANSFER, $return_transfer);
-    	curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/534.10 (KHTML, like Gecko) Chrome/8.0.552.28 Safari/534.10");
-    	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-    	curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    	curl_setopt($ch, CURLOPT_HEADER, false);
-    	curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-    	curl_setopt($ch, CURLOPT_AUTOREFERER, true);
+        $url,
+        array $post_data = [],
+        $verbose = false,
+        $ref_url = false,
+        $cookie_location = false,
+        $return_transfer = true
+    ) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 40);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, $return_transfer);
+        curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/534.10 (KHTML, like Gecko) Chrome/8.0.552.28 Safari/534.10");
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        curl_setopt($ch, CURLOPT_AUTOREFERER, true);
 
-    	if ($cookie_location !== false) {
-    		curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_location);
-    		curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie_location);
-    		curl_setopt($ch, CURLOPT_COOKIE, session_name() . '=' . session_id());
-    	}
+        if ($cookie_location !== false) {
+            curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_location);
+            curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie_location);
+            curl_setopt($ch, CURLOPT_COOKIE, session_name() . '=' . session_id());
+        }
 
-    	if ($verbose !== false) {
-    		$verbose_pointer = fopen($verbose, 'w');
-    		curl_setopt($ch, CURLOPT_VERBOSE, true);
-    		curl_setopt($ch, CURLOPT_STDERR, $verbose_pointer);
-    	}
+        if ($verbose !== false) {
+            $verbose_pointer = fopen($verbose, 'w');
+            curl_setopt($ch, CURLOPT_VERBOSE, true);
+            curl_setopt($ch, CURLOPT_STDERR, $verbose_pointer);
+        }
 
-    	if ($ref_url !== false) {
-    	    curl_setopt($ch, CURLOPT_REFERER, $ref_url);
-    	}
+        if ($ref_url !== false) {
+            curl_setopt($ch, CURLOPT_REFERER, $ref_url);
+        }
 
-    	if (count($post_data) > 0) {
-    	    curl_setopt($ch, CURLOPT_POST, true);
-    	    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
-    	}
+        if (count($post_data) > 0) {
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
+        }
 
-    	$result = curl_exec($ch);
-    	$http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    	if ($http_code == 404) {
-    		return false;
-    	}
+        $result = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        if ($http_code == 404) {
+            return false;
+        }
 
-    	curl_close($ch);
-    	unset($ch);
-    	return $result;
+        curl_close($ch);
+        unset($ch);
+        return $result;
     }
 }
 // ------------------------------------------------------------------------
@@ -177,7 +177,7 @@ if (!function_exists('redirect')) {
                 header('Location: ' . $url);
             } else {
                 header("refresh:{$time};url={$url}");
-                echo($msg);
+                echo ($msg);
             }
             exit();
         } else {
@@ -192,10 +192,16 @@ if (!function_exists('is_weixin_browser')) {
     // 判断是否是在微信浏览器里
     function is_weixin_browser()
     {
-        $agent = $_SERVER ['HTTP_USER_AGENT'];
-        if (strpos($agent, 'MicroMessenger') !== false
+        if (empty($_SERVER['HTTP_USER_AGENT'])) {
+            return false;
+        }
+
+        $agent = $_SERVER['HTTP_USER_AGENT'];
+        if (
+            strpos($agent, 'MicroMessenger') !== false
             || strpos($agent, 'icroMessenger') !== false
-            || strpos($agent, 'Windows Phone' !== false)) {
+            || strpos($agent, 'Windows Phone' !== false)
+        ) {
             return true;
         }
 
@@ -235,7 +241,8 @@ if (!function_exists('get_current_url')) {
     {
         $url = 'http://';
         if ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on')
-            || $_SERVER['SERVER_PORT'] == '443') {
+            || $_SERVER['SERVER_PORT'] == '443'
+        ) {
             $url = 'https://';
         }
         if ($_SERVER['SERVER_PORT'] != '80' && $_SERVER['SERVER_PORT'] != '443') {
@@ -244,7 +251,7 @@ if (!function_exists('get_current_url')) {
             $url .= $_SERVER['HTTP_HOST'];
         }
 
-        return $isDomain ? $url : $url.$_SERVER['REQUEST_URI'];
+        return $isDomain ? $url : $url . $_SERVER['REQUEST_URI'];
     }
 }
 // ------------------------------------------------------------------------
@@ -256,7 +263,7 @@ if (!function_exists('generate_nonce_str')) {
         $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         $str = "";
         $length = strlen($chars);
-        for($i = 0; $i < $length; $i++) {
+        for ($i = 0; $i < $length; $i++) {
             $str .= $chars[mt_rand(0,  $length - 1)];
         }
         return $str;
@@ -277,8 +284,8 @@ if (!function_exists('get_client_ip')) {
         if ($ip !== NULL) return $ip[$type];
         if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
             $arr    =   explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-            $pos    =   array_search('unknown',$arr);
-            if(false !== $pos) unset($arr[$pos]);
+            $pos    =   array_search('unknown', $arr);
+            if (false !== $pos) unset($arr[$pos]);
             $ip     =   trim($arr[0]);
         } elseif (isset($_SERVER['HTTP_CLIENT_IP'])) {
             $ip     =   $_SERVER['HTTP_CLIENT_IP'];
@@ -304,12 +311,12 @@ if (!function_exists('signature')) {
         $tmp = [];
         foreach ($datas as $k => $v) {
             if ("" !== $v && null != $v && ($k !== 'signature' && $k !== 'sign')) {
-              $tmp[] = $k ."=". $v;
+                $tmp[] = $k . "=" . $v;
             }
         }
 
-        $query_string = implode($tmp, '&');
-        return md5($query_string."&key=".$key);
+        $query_string = implode('&', $tmp);
+        return md5($query_string . "&key=" . $key);
     }
 }
 // ------------------------------------------------------------------------
@@ -412,7 +419,8 @@ if (!function_exists('authcode')) {
             // substr($result, 10, 16) == substr(md5(substr($result, 26).$keyb), 0, 16) 验证数据完整性
             // 验证数据有效性，请看未加密明文的格式
             if ((substr($result, 0, 10) == 0 || substr($result, 0, 10) - time() > 0)
-                && substr($result, 10, 16) == substr(md5(substr($result, 26) . $keyb), 0, 16)) {
+                && substr($result, 10, 16) == substr(md5(substr($result, 26) . $keyb), 0, 16)
+            ) {
                 return substr($result, 26);
             } else {
                 return '';
@@ -472,7 +480,7 @@ if (!function_exists('html_filter')) {
     {
         $filter = [
             "/\s/",
-            "/<(\/?)(script|i?frame|style|html|body|title|link|\?|\%)([^>]*?)>/isU",//object|meta|
+            "/<(\/?)(script|i?frame|style|html|body|title|link|\?|\%)([^>]*?)>/isU", //object|meta|
             "/(<[^>]*)on[a-zA-Z]\s*=([^>]*>)/isU",
         ];
 
@@ -482,7 +490,7 @@ if (!function_exists('html_filter')) {
             "\\1\\2",
         ];
 
-        $str = preg_replace($filter,$replace,$html);
+        $str = preg_replace($filter, $replace, $html);
         return $str;
     }
 }
@@ -564,7 +572,7 @@ if (!function_exists('hex2str')) {
     function hex2str($hex)
     {
         $string = '';
-        for ($i = 0; $i < strlen( $hex ) - 1; $i += 2) {
+        for ($i = 0; $i < strlen($hex) - 1; $i += 2) {
             $string .= chr(hexdec($hex[$i] . $hex[$i + 1]));
         }
         return $string;
@@ -582,16 +590,16 @@ if (!function_exists('human_date')) {
         $second = PLUME_CURRENT_TIME - $dateline;
         if ($second > 31536000) {
             return date($dateformat, $dateline);
-        } elseif($second > 2592000) {
-            return floor($second / 2592000).'月前';
-        } elseif($second > 86400) {
-            return floor($second / 86400).'天前';
-        } elseif($second > 3600) {
-            return floor($second / 3600).'小时前';
-        } elseif($second > 60) {
-            return floor($second / 60).'分钟前';
+        } elseif ($second > 2592000) {
+            return floor($second / 2592000) . '月前';
+        } elseif ($second > 86400) {
+            return floor($second / 86400) . '天前';
+        } elseif ($second > 3600) {
+            return floor($second / 3600) . '小时前';
+        } elseif ($second > 60) {
+            return floor($second / 60) . '分钟前';
         } else {
-            return $second.'秒前';
+            return $second . '秒前';
         }
     }
 }
@@ -604,7 +612,7 @@ if (!function_exists('print_stack_trace')) {
         $html = '';
         foreach ($array as $row) {
             if (isset($row['file']) && isset($row['line']) && isset($row['function'])) {
-                $html .= '<p>'.$row['file'].':'.$row['line'].'行,调用方法:'.$row['function']."</p>";
+                $html .= '<p>' . $row['file'] . ':' . $row['line'] . '行,调用方法:' . $row['function'] . "</p>";
             }
         }
 
@@ -623,20 +631,20 @@ if (!function_exists('dump')) {
      */
     function dump()
     {
-        if (!IS_CLI) echo '<pre style="font-size:12px; color:#0000FF">'.PHP_EOL;
+        if (!IS_CLI) echo '<pre style="font-size:12px; color:#0000FF">' . PHP_EOL;
         $vars = func_get_args();
         foreach ($vars as $var) {
             if (is_array($var)) {
                 print_r($var);
-            } else if(is_object($var)) {
-                echo get_class($var)." Object";
-            } else if(is_resource($var)) {
+            } else if (is_object($var)) {
+                echo get_class($var) . " Object";
+            } else if (is_resource($var)) {
                 echo (string)$var;
             } else {
                 echo var_dump($var);
             }
         }
-        if (!IS_CLI) echo '</pre>'.PHP_EOL;
+        if (!IS_CLI) echo '</pre>' . PHP_EOL;
     }
 }
 // ------------------------------------------------------------------------
@@ -663,29 +671,59 @@ if (!function_exists('fetch_from_array')) {
             return $array[$index];
         } elseif (strpos($index, '/')) {
             $keys = explode('/', $index);
-            switch(count($keys)) {
-            case 1:
-                if (isset($array[$keys[0]])) {
-                    return $array[$keys[0]];
-                }
-                break;
-            case 2:
-                if (isset($array[$keys[0]][$keys[1]])) {
-                    return $array[$keys[0]][$keys[1]];
-                }
-                break;
-            case 3:
-                if (isset($array[$keys[0]][$keys[1]][$keys[2]])) {
-                    return $array[$keys[0]][$keys[1]][$keys[2]];
-                }
-                break;
-            case 4:
-                if (isset($array[$keys[0]][$keys[1]][$keys[2]][$keys[3]])) {
-                    return $array[$keys[0]][$keys[1]][$keys[2]][$keys[3]];
-                }
-                break;
+            switch (count($keys)) {
+                case 1:
+                    if (isset($array[$keys[0]])) {
+                        return $array[$keys[0]];
+                    }
+                    break;
+                case 2:
+                    if (isset($array[$keys[0]][$keys[1]])) {
+                        return $array[$keys[0]][$keys[1]];
+                    }
+                    break;
+                case 3:
+                    if (isset($array[$keys[0]][$keys[1]][$keys[2]])) {
+                        return $array[$keys[0]][$keys[1]][$keys[2]];
+                    }
+                    break;
+                case 4:
+                    if (isset($array[$keys[0]][$keys[1]][$keys[2]][$keys[3]])) {
+                        return $array[$keys[0]][$keys[1]][$keys[2]][$keys[3]];
+                    }
+                    break;
             }
         }
         return $default;
+    }
+}
+// ------------------------------------------------------------------------
+if (!function_exists('generate_debug_trace')) {
+    function generate_debug_trace($e)
+    {
+        $removeThisCall = false;
+        if (empty($e) || !is_a($e, 'Exception')) {
+            $e = new Exception();
+            $removeThisCall = true;
+        }
+
+        $trace = explode("\n", $e->getTraceAsString());
+        // reverse array to make steps line up chronologically
+        $trace = array_reverse($trace);
+
+        array_shift($trace); // remove {main}
+        if ($removeThisCall) {
+            array_pop($trace); // remove call to this method
+        }
+
+        $length = count($trace);
+        $result = array();
+        
+        for ($i = 0; $i < $length; $i++) {
+            // replace '#someNum' with '$i)', set the right ordering
+            $result[] = ($i + 1)  . ')' . substr($trace[$i], strpos($trace[$i], ' '));
+        }
+
+        return "\t" . implode("\n\t", $result);
     }
 }
