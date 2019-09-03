@@ -38,7 +38,7 @@ try {
     $app = PlumePHP::app();
     // add core path
     $app->path(PLUME_PHP_PATH . DS . 'core');
-    $app->run();
+    $app->runCli();
 } catch (Exception $e) {
     // 全局异常处理
     echo $e->getMessage(), PHP_EOL;
