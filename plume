@@ -19,6 +19,7 @@
 */
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
+ini_set('memory_limit', '512M');
 
 if (PHP_SAPI != 'cli') {
     echo 'This script run only from the command line'.PHP_EOL;
@@ -34,7 +35,10 @@ include __DIR__ . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
 // 启动应用程序
 try {
-    PlumePHP::app()->run();
+    $app = PlumePHP::app();
+    // add core path
+    $app->path(PLUME_PHP_PATH . DS . 'core');
+    $app->run();
 } catch (Exception $e) {
     // 全局异常处理
     echo $e->getMessage(), PHP_EOL;

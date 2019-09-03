@@ -1111,7 +1111,7 @@ class PlumeEngine
 
         // Register framework methods
         $methods = [
-            'start', 'stop', 'route', 'halt', 'error', 'notFound', 'biz',
+            'start', 'stop', 'route', 'halt', 'error', 'notFound',
             'render', 'json', 'jsonp', 'log'
         ];
         foreach ($methods as $name) {
@@ -1391,7 +1391,7 @@ class PlumeEngine
     {
         $this->_log('Msg: '.$e->getMessage().
             ', Code: '.$e->getCode().
-            ', Trace: \n'.$e->getTraceAsString(), [], 'ERROR', true);
+            ', Trace: '.PHP_EOL.$e->getTraceAsString(), [], 'ERROR', true);
 
         if ($this->get('plumephp.env') == 'production') {
             $msg = sprintf('<h1>500 Internal Server Error</h1>'.
@@ -1417,7 +1417,7 @@ class PlumeEngine
                 ->send();
         } catch (\Throwable $t) { // PHP 7.0+
             exit($msg);
-        } catch(\Exception $e) { // PHP < 7
+        } catch (\Exception $e) { // PHP < 7
             exit($msg);
         }
     }
@@ -1511,11 +1511,19 @@ class PlumeEngine
     /**
      * 业务调用接口
      * @param string $bizpath 调用地址
-     * @param PlumeViewObject $ar 请求参数
      * @return mixed
      */
-    public function _biz($bizpath, PlumeViewObject $ar)
+    public function biz($bizpath = '')
     {
+        $startTime = microtime(true);
+
+        $ar = new PlumeParam();
+        L("[biz]request: ".$ar);
+
+        if (empty($bizpath) && $ar->has('path')) {
+            $bizpath = $ar->path;
+        }
+
         // bizpath的特殊字符处理
         $bizpath = str_replace("..", "", $bizpath);
         $bizpath = str_replace("/", "", $bizpath);
@@ -1551,6 +1559,8 @@ class PlumeEngine
 
         // 类名，使用biz_$module名称前缀
         $className = 'biz_'.$module.'_'.implode('_', $classname);
+        L('[biz]class: '.$className.'::'.$func.' call start');
+
         if (method_exists($className, 'beforeBiz')) {
             call_user_func([$className, 'beforeBiz'], $ar);
         }
@@ -1563,6 +1573,8 @@ class PlumeEngine
         if (method_exists($className, 'afterBiz')) {
             $user_func_data = call_user_func([$className, 'afterBiz'], $ar, $user_func_data);
         }
+
+        L('[biz]class: '.$className.'::'.$func.' call success, cost time: '.round(microtime(true) - $startTime, 3).'s');
 
         // 返回请求数据
         return $user_func_data;
@@ -1614,7 +1626,8 @@ class PlumeEngine
             defined('SITE_DOMAIN') OR define('SITE_DOMAIN', isset($_SERVER['HTTP_HOST']) ? strip_tags($_SERVER['HTTP_HOST']) : '');
             defined('IS_GET') OR define('IS_GET', $_SERVER['REQUEST_METHOD'] =='GET' ? true : false);
             defined('IS_POST') OR define('IS_POST', $_SERVER['REQUEST_METHOD'] =='POST' ? true : false);
-            defined('IS_AJAX') OR define('IS_AJAX', (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') ? true : false);
+            defined('IS_AJAX') OR define('IS_AJAX', (isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+                && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') ? true : false);
         }
 
         // 加载全局配置文件
@@ -1665,7 +1678,7 @@ class PlumeEngine
     }
 
     // run cli
-    protected function runCli()
+    public function runCli()
     {
         global $argv;
         $args = $this->arguments($argv);
@@ -1699,8 +1712,10 @@ class PlumeEngine
         $this->set('plumephp.file', $file);
         // 加载执行文件
         require($filename);
-
         $className = $module.'_'.str_replace(['\\', '/'], '_', $file).'_cmd';
+
+        L('[cli]class name: '.$className.', args: '.json_encode($args));
+
         if (!class_exists($className)) {
             $this->_halt(404, '!!! 404 !!! class not exist: '.$className);
         }
@@ -1710,7 +1725,7 @@ class PlumeEngine
             $this->_halt(404, '!!! 404 !!! no run method: '.$className);
         }
 
-        return $actionInstance->run($args);
+        return $actionInstance->run();
     }
 
     // cli的参数处理
@@ -1778,8 +1793,10 @@ EOF;
     4. 没有对应的则匹配下一个
     5. 没有file时缺省对应index.php，有则对应file.php
     */
-    protected function runWeb()
+    public function runWeb()
     {
+        $startTime = microtime(true);
+
         $requestUri = $_SERVER['REQUEST_URI'];
         $vdname = C('VDNAME');
         if (!empty($vdname)) {
@@ -1895,17 +1912,25 @@ EOF;
         $this->set('plumephp.file', $file);
         $this->set('plumephp.args', $args);
         $className = $module.'_'.str_replace(DS, '_', $file).'_action';
+
+        L('[web]class name:'.$className.', args:'.json_encode($args, JSON_UNESCAPED_UNICODE).
+            ', request: ' . json_encode($_REQUEST, JSON_UNESCAPED_UNICODE));
+
         if (!class_exists($className)) {
             $this->_halt(404, '!!! 404 !!! uri='.$requestUri.'class not exist: '.$className);
         }
 
         $actionInstance = new $className();
+
         // 根据动作去找对应的方法
         if (!method_exists($actionInstance, 'run')) {
             $this->_halt(404, '!!! 404 !!! uri='.$requestUri.' no run method: '.$className);
         }
 
-        return $actionInstance->run();
+        $res = $actionInstance->run();
+        L('[web]class name:'.$className.' success, cost time: '.round(microtime(true) - $startTime, 3).'s');
+
+        return $res;
     }
 }
 /**
@@ -2379,10 +2404,10 @@ class PlumeResponse
         }
 
         // Send content length
-        $length = $this->getContentLength();
-        if ($length > 0) {
-            header('Content-Length: '.$length);
-        }
+        // $length = $this->getContentLength();
+        // if ($length > 0) {
+        //     header('Content-Length: '.$length);
+        // }
 
         return $this;
     }
@@ -2644,17 +2669,34 @@ class PlumeEvent
     }
 }
 // 来自前端的视图对象
-class PlumeViewObject
+class PlumeParam
 {
     private $urlparam;
     private $inited = false;
-    private function init() {
+    private function init()
+    {
         if ($this->inited) return;
         parse_str($_SERVER['QUERY_STRING'], $this->urlparam);
+        // Check for JSON input
+        if (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'application/json') === 0) {
+            $body = file_get_contents('php://input');
+            if ($body != '') {
+                $data = json_decode($body, true);
+                if ($data != null) {
+                    if (isset($data['jsonrpc']) && !empty($data['params'])) {
+                        $this->urlparam = array_merge($this->urlparam, $data['params']);
+                    } else {
+                        $this->urlparam = array_merge($this->urlparam, $data);
+                    }
+                }
+            }
+        }
+
         $this->inited = true;
     }
 
-    public function __get($pn) {
+    public function __get($pn)
+    {
         $v = $this->getValue($pn);
         if (is_string($v)) {
             $v = htmlentities($v, ENT_QUOTES);
@@ -2662,15 +2704,19 @@ class PlumeViewObject
         return $v;
     }
 
-    public function __set($pn, $val) {
+    public function __set($pn, $val)
+    {
         setcookie($pn, $val);
     }
 
-    public function __toString() {
+    public function __toString()
+    {
+        $this->init();
         return json_encode($this->urlparam, JSON_UNESCAPED_UNICODE);
     }
 
-    public function getValue($pn) {
+    public function getValue($pn)
+    {
         if (isset($_POST[$pn])) return $_POST[$pn];
         if (isset($_GET[$pn])) return $_GET[$pn];
         $this->init();
@@ -2679,7 +2725,8 @@ class PlumeViewObject
         return "";
     }
 
-    public function has($pn) {
+    public function has($pn)
+    {
         if (isset($_POST[$pn])) return true;
         if (isset($_GET[$pn])) return true;
         $this->init();
@@ -2688,7 +2735,8 @@ class PlumeViewObject
         return false;
     }
 
-    public function updateRouteArg($arr) {
+    public function updateRouteArg($arr)
+    {
         if (is_array($arr) && count($arr) > 0) {
             $this->init();
             $this->urlparam = array_merge($this->urlparam, $arr);
@@ -2699,6 +2747,7 @@ class PlumeViewObject
  * 日志类
  * 保存路径为 storage/log，按天存放
  * fatal,error和warning会记录在.log.wf文件中
+ * sql会记录在.log.sql文件中
  */
 class PlumeLogger
 {
@@ -2753,6 +2802,12 @@ class PlumeLogger
         }
 
         $log_message = date('[ Y-m-d H:i:s ]') . '['.$this->logId.']' . "[{$level}]" . $msg . PHP_EOL;
+        if (strtoupper($level) == 'SQL') {
+            $logPath = $this->logPath ? $this->logPath : LOG_PATH . '/' . date('Ymd') . '.log.sql';
+            file_put_contents($logPath, $log_message, FILE_APPEND | LOCK_EX);
+            return;
+        }
+
         if ($wf) {
             $logPath = $this->logPath ? $this->logPath : LOG_PATH . '/' . date('Ymd') . '.log.wf';
             file_put_contents($logPath, $log_message, FILE_APPEND | LOCK_EX);
