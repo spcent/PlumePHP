@@ -44,7 +44,7 @@ PlumePHP::route('GET /api', function() {
 
 // 通用的路由逻辑
 PlumePHP::route('*', function() {
-    PlumePHP::app()->run();
+    PlumePHP::app()->runAction();
 });
 
 // 启动
@@ -84,7 +84,7 @@ PlumePHP is a fast, simple, extensible framework for PHP. PlumePHP enables you t
 quickly and easily build RESTful web applications.
 
 ```php
-require 'PlumePHP/PlumePHP.php';
+require 'PlumePHP.php';
 
 PlumePHP::route('/', function(){
     echo 'hello world!';
@@ -93,15 +93,15 @@ PlumePHP::route('/', function(){
 PlumePHP::start();
 ```
 
-[Learn more](http://PlumePHPphp.com/learn)
+[Learn more](http://plumephp.com/learn)
 
 # Requirements
 
-PlumePHP requires `PHP 5.3` or greater.
+PlumePHP requires `PHP 7.1` or greater.
 
 # License
 
-PlumePHP is released under the [MIT](http://PlumePHPphp.com/license) license.
+PlumePHP is released under the [MIT](http://plumephp.com/license) license.
 
 # Installation
 
@@ -110,10 +110,10 @@ PlumePHP is released under the [MIT](http://PlumePHPphp.com/license) license.
 If you're using [Composer](https://getcomposer.org/), you can run the following command:
 
 ```
-composer require mikecao/PlumePHP
+composer require spcent/PlumePHP
 ```
 
-OR you can [download](https://github.com/mikecao/PlumePHP/archive/master.zip) them directly 
+OR you can [download](https://github.com/spcent/PlumePHP/archive/master.zip) them directly.
 and extract them to your web directory.
 
 2\. Configure your webserver.
@@ -143,7 +143,7 @@ server {
 First include the framework.
 
 ```php
-require 'PlumePHP/PlumePHP.php';
+require 'PlumePHP.php';
 ```
 
 If you're using Composer, run the autoloader instead.
@@ -982,9 +982,9 @@ as an object instance.
 ```php
 require 'PlumePHP/autoload.php';
 
-use PlumePHP\Engine;
+use PlumeEngine;
 
-$app = new Engine();
+$app = new PlumeEngine();
 
 $app->route('/', function(){
     echo 'hello world!';
