@@ -982,9 +982,9 @@ as an object instance.
 ```php
 require 'PlumePHP/autoload.php';
 
-use PlumePHP\Engine;
+use PlumeEngine;
 
-$app = new Engine();
+$app = new PlumeEngine();
 
 $app->route('/', function(){
     echo 'hello world!';
