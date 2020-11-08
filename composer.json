@@ -1,30 +1,32 @@
 {
-  "name": "plume framework",
-  "description": "plume framework",
-  "keywords": ["laravel", "artisan", "dispatcher", "schedule", "cron"],
-  "type": "library",
-  "homepage": "http://www.spcent.com/",
-  "license": "MIT",
-  "authors": [
-    {
-      "name": "spcent",
-      "email": "spcent@qq.com",
-      "homepage": "http://www.spcent.com/",
-      "role": "Software Engineer"
-    }
-  ],
-  "require": {
-    "php": ">=5.3.0"
-  },
-  "require-dev": {
-    "phpunit/phpunit": "~4.6"
-  },
-  "autoload": {
-    "classmap": [
+    "name": "spcent/plumephp",
+    "type": "library",
+    "description": "一个单文件极简的php框架，可运行在fpm或者swoole协程模式下",
+    "keywords": [
+      "swoole",
+      "framework",
+      "async",
+      "plumephp"
     ],
-    "psr-4": {
+    "license": "Apache-2.0",
+    "authors": [
+      {
+        "name": "spcent",
+        "email": "spcent@qq.com"
+      }
+    ],
+    "require": {
+      "php": ">=7.1"
+    },
+    "autoload": {
+      "psr-4": {
+        "Plume\\": "src/"
+      }
+    },
+    "suggest": {
+      "ext-redis": "如果缓存驱动为Redis",
+      "ext-msgpack": "globalData和Rpc服务通讯的打包",
+      "ext-swoole": "常驻内存运行必须的扩展",
+      "ext-pdo": "数据库驱动"
     }
-  },
-  "minimum-stability": "stable",
-  "prefer-stable": true
-}
+  }

@@ -1,4 +1,5 @@
-<?php if (!defined('PLUME_PHP_PATH')) exit('No direct script access allowed');
+<?php
+
 /**
  * PlumePHP是一款开源免费、轻量级的PHP框架。具有低耦合、轻量级、基于VBD模型等特点，
  * 加速高性能现代WEB网站及WebApp应用的开发。
@@ -93,7 +94,7 @@ if (!function_exists('json_format')) {
 // ------------------------------------------------------------------------
 if (!function_exists('json_output')) {
     // 异步输出结果,0表示成功，非0表示失败
-    function json_output($msg, $code = 0, $data = '', $is_format = false)
+    function json_output(string $msg, int $code = 0, $data = '', bool $is_format = false)
     {
         $res = ['code' => $code, 'msg' => $msg, 'data' => $data];
         if ($is_format) {
@@ -107,7 +108,7 @@ if (!function_exists('json_output')) {
 if (!function_exists('curl_get_contents')) {
     // 基于curl的file_get_contents
     function curl_get_contents(
-        $url,
+        string $url,
         array $post_data = [],
         $verbose = false,
         $ref_url = false,
@@ -166,7 +167,7 @@ if (!function_exists('redirect')) {
      * @param string $msg 重定向前的提示信息
      * @return void
      */
-    function redirect($url, $time = 0, $msg = '')
+    function redirect(string $url, int $time = 0, string $msg = '')
     {
         //多行URL地址支持
         $url = str_replace(["\n", "\r"], '', $url);
@@ -190,7 +191,7 @@ if (!function_exists('redirect')) {
 // ------------------------------------------------------------------------
 if (!function_exists('is_weixin_browser')) {
     // 判断是否是在微信浏览器里
-    function is_weixin_browser()
+    function is_weixin_browser(): bool
     {
         if (empty($_SERVER['HTTP_USER_AGENT'])) {
             return false;
@@ -217,7 +218,7 @@ if (!function_exists('is_from_browser')) {
      * @param  void
      * @return boolen
      */
-    function is_from_browser()
+    function is_from_browser(): bool
     {
         static $ret_val = null;
         if ($ret_val === null) {
@@ -237,7 +238,7 @@ if (!function_exists('is_from_browser')) {
 // ------------------------------------------------------------------------
 if (!function_exists('get_current_url')) {
     // php获取当前访问的完整url地址
-    function get_current_url($isDomain = false)
+    function get_current_url(bool $is_domain = false): string
     {
         $url = 'http://';
         if ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on')
@@ -251,13 +252,13 @@ if (!function_exists('get_current_url')) {
             $url .= $_SERVER['HTTP_HOST'];
         }
 
-        return $isDomain ? $url : $url . $_SERVER['REQUEST_URI'];
+        return $is_domain ? $url : $url . $_SERVER['REQUEST_URI'];
     }
 }
 // ------------------------------------------------------------------------
 if (!function_exists('generate_nonce_str')) {
     // 生成随机字符串
-    function generate_nonce_str($length = 16)
+    function generate_nonce_str(int $length = 16): string
     {
         // 密码字符集，可任意添加你需要的字符
         $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -273,10 +274,10 @@ if (!function_exists('generate_nonce_str')) {
 if (!function_exists('get_client_ip')) {
     /**
      * 获取客户端IP地址
-     * @param integer $type 返回类型 0 返回IP地址 1 返回IPV4地址数字
+     * @param int $type 返回类型 0 返回IP地址 1 返回IPV4地址数字
      * @return mixed
      */
-    function get_client_ip($type = 0)
+    function get_client_ip(int $type = 0)
     {
         $type = $type ? 1 : 0;
         static $ip = NULL;
@@ -300,13 +301,8 @@ if (!function_exists('get_client_ip')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('signature')) {
-    function signature($datas, $key = 'afjd32t4-#of=2a;2fd#c@ff')
+    function signature(array $datas, string $key = 'afjd32t4-#of=2a;2fd#c@ff'): string
     {
-        // 数据类型检测
-        if (!is_array($datas)) {
-            $datas = (array)$datas;
-        }
-
         ksort($datas);
         $tmp = [];
         foreach ($datas as $k => $v) {
@@ -327,7 +323,7 @@ if (!function_exists('export_csv')) {
      * @param string $filename 下载文件名
      * @param array $data 数据
      */
-    function export_csv($filename, array $data)
+    function export_csv(string $filename, array $data)
     {
         header("Cache-Control: public");
         header("Pragma: public");
@@ -358,7 +354,7 @@ if (!function_exists('authcode')) {
      * @param int $expiry 密文有效期
      * @return string
      */
-    function authcode($string, $operation = 'DECODE', $key = '', $expiry = 0)
+    function authcode(string $string, string $operation = 'DECODE', string $key = '', int $expiry = 0): string
     {
         // 动态密匙长度，相同的明文会生成不同密文就是依靠动态密匙
         $ckeyLength = 4;
@@ -461,7 +457,7 @@ if (!function_exists('uuid')) {
      * @param string $prefix 指定前缀参数
      * @return string
      */
-    function uuid($prefix = "")
+    function uuid(string $prefix = ""): string
     {
         $time = md5(microtime());
         $rand1 = md5(substr($time, rand(0, 10), rand(22, 32)));
@@ -476,7 +472,7 @@ if (!function_exists('html_filter')) {
      * @param string $html 需要过滤的html代码
      * @return string
      */
-    function html_filter($html)
+    function html_filter(string $html)
     {
         $filter = [
             "/\s/",
@@ -501,17 +497,17 @@ if (!function_exists('strcut')) {
      * @param string $str 字符串
      * @param int $len 截取长度
      * @param string $ext 多余内容替换字符串
-     * @param int $zhLen 中文字符长度
+     * @param int $zh_len 中文字符长度
      * @return string
      */
-    function strcut($str, $len, $ext = "", $zhLen = 0)
+    function strcut(string $str, int $len, string $ext = "", int $zh_len = 0): string
     {
         $count = 0;
         $output = "";
         preg_match_all("/./us", $str, $match);
         foreach ($match[0] as $v) {
             $vLen = strlen($v);
-            $count += ($zhLen == 0) ? $vLen : $zhLen;
+            $count += ($zh_len == 0) ? $vLen : $zh_len;
             $output .= $v;
             if ($count >= $len) {
                 break;
@@ -527,7 +523,7 @@ if (!function_exists('strcut')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('str_starts_with')) {
-    function str_starts_with($haystack, $needle)
+    function str_starts_with(string $haystack, string $needle): bool
     {
         $length = strlen($needle);
         return (substr($haystack, 0, $length) === $needle);
@@ -535,7 +531,7 @@ if (!function_exists('str_starts_with')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('str_ends_with')) {
-    function str_ends_with($haystack, $needle)
+    function str_ends_with(string $haystack, string $needle): bool
     {
         $length = strlen($needle);
         if ($length == 0) {
@@ -551,7 +547,7 @@ if (!function_exists('str2hex')) {
      * @param $str
      * @return string
      */
-    function str2hex($str)
+    function str2hex(string $str): string
     {
         $hex = '';
         for ($i = 0; $i < strlen($str); $i++) {
@@ -569,7 +565,7 @@ if (!function_exists('hex2str')) {
      * @param $hex
      * @return string
      */
-    function hex2str($hex)
+    function hex2str(string $hex): string
     {
         $string = '';
         for ($i = 0; $i < strlen($hex) - 1; $i += 2) {
@@ -581,12 +577,8 @@ if (!function_exists('hex2str')) {
 // ------------------------------------------------------------------------
 if (!function_exists('human_date')) {
     // 转换为人性化时间
-    function human_date($dateline, $dateformat = 'Y-m-d H:i:s')
+    function human_date(int $dateline, string $dateformat = 'Y-m-d H:i:s'): string
     {
-        if (!is_numeric($dateline)) {
-            return $dateline;
-        }
-
         $second = PLUME_CURRENT_TIME - $dateline;
         if ($second > 31536000) {
             return date($dateformat, $dateline);
@@ -606,7 +598,7 @@ if (!function_exists('human_date')) {
 // ------------------------------------------------------------------------
 if (!function_exists('print_stack_trace')) {
     // 输出调用堆栈
-    function print_stack_trace($isEcho = true)
+    function print_stack_trace(bool $is_echo = true)
     {
         $array = debug_backtrace();
         $html = '';
@@ -616,7 +608,7 @@ if (!function_exists('print_stack_trace')) {
             }
         }
 
-        if ($isEcho) {
+        if ($is_echo) {
             echo $html;
         } else {
             return $html;
@@ -695,6 +687,30 @@ if (!function_exists('fetch_from_array')) {
             }
         }
         return $default;
+    }
+}
+// ------------------------------------------------------------------------
+if (!function_exists('money_yuan_to_fen')) {
+    /**
+     * 人名币元转化成分
+     * @param $price float 金额元
+     * @return int
+     */
+    function money_yuan_to_fen($price)
+    {
+        return intval(bcmul($price, 100, 2));
+    }
+}
+// ------------------------------------------------------------------------
+if (!function_exists('money_fen_to_yuan')) {
+    /**
+     * 人名币分转化成分
+     * @param $price int 金额分
+     * @return float
+     */
+    function money_fen_to_yuan(int $price)
+    {
+        return bcdiv($price, 100, 2);
     }
 }
 // ------------------------------------------------------------------------

@@ -1,47 +1,86 @@
 <?php
+declare(strict_types=1);
+
 /**
- * PlumePHP是一款开源免费、轻量级的PHP框架。具有低耦合、轻量级、基于VBD模型等特点，
- * 加速高性能现代WEB网站及WebApp应用的开发。
- */
-/**
- * index.php参考代码
- * 
-// 加载框架文件
+ * PlumePHP is an open source, free, lightweight, single file PHP framework.
+ * With the characteristics of low coupling, lightweight and based on the VBD model.
+ * It was born for the development of high-performance modern web sites and
+ * WebApp applications.
+ *
+index.php:
+
+// Loads the single framework file
 include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-// api首页展示
 $app = PlumePHP::app();
-$app->route('GET /api', function() {
-    header('Content-Type: text/html;charset=utf-8');
-    echo json_encode(['code'=>0, 'data'=>'api', 'msg'=>'success'], JSON_UNESCAPED_UNICODE);
+
+$app->route('GET|OPTIONS /api', function() {
+    $ret = ['code'=>0, 'data'=>'api', 'msg'=>'success'];
+    echo json_encode($ret, JSON_UNESCAPED_UNICODE);
 });
 
-// 通用的路由逻辑，如果只是写接口，可以不用框架自带MVC架构
-$app->route('*', function() {
-    PlumePHP::app()->run();
+$app->route('POST /api', function () use ($app) {
+    try {
+        $result = $app->biz();
+        if (is_null($result)) $result = 0;
+        $ret = ['code'=>0, 'data'=>$result, 'msg'=>'success'];
+    } catch (Exception $e) {
+        $code = $e->getCode();
+        if (!$code) $code = 1;
+        $ret = ['code'=>$code, 'data'=>$result, 'msg'=>$e->getMessage()];
+    }
+
+    echo json_encode($ret, JSON_UNESCAPED_UNICODE);
+    return false;
 });
 
-// 启动
+// The common routing logic, a simple MVC implementation.
+// If you just write the api, you don't have to use the
+// framework's own MVC architecture
+$app->route('*', function() use ($app) {
+    $app->runAction();
+});
+
+// Starts the engine
 $app->start();
- */
-define('PLUME_START_MEMORY',  memory_get_usage());
-define('PLUME_START_TIME', microtime(true));
-define('PLUME_CURRENT_TIME', time());
-define('PLUME_VERSION', '1.1.6');
-defined('DS') or define('DS', DIRECTORY_SEPARATOR);
-defined('PLUME_PHP_PATH') OR define('PLUME_PHP_PATH', __DIR__);
-defined('VENDOR_PATH') OR define('VENDOR_PATH', PLUME_PHP_PATH.DS.'vendor'); // vendor第三方目录
-defined('LOG_PATH') OR define('LOG_PATH', PLUME_PHP_PATH.DS.'storage'.DS.'log'); // log日志目录
 
-////////////////////////////////////////////////////////////////////////////////////////
-// 下面的常有函数和类
-////////////////////////////////////////////////////////////////////////////////////////
+
+
+server.php:
+// Loads the single framework file
+include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+
+$path = realpath(PLUME_PHP_PATH.DS);
+$options = [
+    'path' => $path,
+    //'host'=>'127.0.0.1',    // default is 127.0.0.1 uncomment or --host to override
+    //'port'=>'8080',         // default is 8080 uncomment or  --port to override
+];
+
+PlumePHP::runHTTPServer($options);
+ */
+define('PLUME_START_MEMORY', memory_get_usage());
+define('PLUME_START_TIME', microtime(true));
+define('PLUME_VERSION', '1.3.1');
+defined('DS') or define('DS', DIRECTORY_SEPARATOR);
+defined('PLUME_PHP_PATH') or define('PLUME_PHP_PATH', __DIR__);
+defined('VENDOR_PATH') or define('VENDOR_PATH', PLUME_PHP_PATH . DS . 'vendor');
+defined('LOG_PATH') or define('LOG_PATH', PLUME_PHP_PATH . DS . 'storage' . DS . 'log');
+defined('IS_CLI') or define('IS_CLI', PHP_SAPI=='cli' ? 1 : 0);
+
+if (!interface_exists('JsonSerializable')) {
+    interface JsonSerializable {
+        public function jsonSerialize();
+    }
+}
+
 /**
- * 获取和设置配置参数 支持批量定义
- * 如果$key是关联型数组，则会按K-V的形式写入配置
- * 如果$key是数字索引数组，则返回对应的配置数组
- * @param string|array $key 配置变量
- * @param array|null $value 配置值
+ * Gets and sets configuration parameters to support bulk definition
+ * If $key is an associative array, the configuration is written as k-v.
+ * If $key is a numeric indexed array, the corresponding configuration
+ * array is returned.
+ * @param string|array $key The key
+ * @param array|null $value The value
  * @return array|null
  */
 function C($key, $value = null)
@@ -49,8 +88,8 @@ function C($key, $value = null)
     static $_config = [];
     $args = func_num_args();
     if ($args == 1) {
-        if (is_string($key)) {  //如果传入的key是字符串
-            // 最多3层吧
+        if (is_string($key)) {
+            // Up to three layers
             $names = explode('.', $key, 3);
             $countNames = count($names);
             if ($countNames == 1) {
@@ -68,7 +107,7 @@ function C($key, $value = null)
         }
 
         if (is_array($key)) {
-            if (array_keys($key) !== range(0, count($key) - 1)) {  //如果传入的key是关联数组
+            if (array_keys($key) !== range(0, count($key) - 1)) {
                 $_config = array_merge($_config, $key);
             } else {
                 $ret = [];
@@ -86,27 +125,67 @@ function C($key, $value = null)
     return null;
 }
 /**
- * 如果文件存在就include进来
- * @param string $path 文件路径
- * @param bool $once 是否使用include_once，默认是false
+ * If the file exists, include it
+ * @param string $path file path
+ * @param bool $once Whether to use include_once, the default is false
  * @return
  */
-function I($path, $once = false)
+function I(string $path, bool $once = false)
 {
     if (file_exists($path)) {
         $once ? include_once $path : include $path;
     }
 }
 /**
- * 日志输出
- * @param string $msg 日志内容
- * @param array $context 用上下文信息替换记录信息中的占位符，默认为空
- * @param string $level 日志等级，默认是DEBUG
- * @param bool $wf 是否记录到单独的wf日志中，默认是false
+ * Record log
+ * @param string $msg The record
+ * @param array $context Replaces the placeholder in the record information
+ *              with context information, which is empty by default
+ * @param string $level Log level, the default is DEBUG
+ * @param bool $wf Whether to log in a separate wf log, the default is false
  */
-function L($msg, array $context = array(), $level = 'DEBUG', $wf = false) {
+function L(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false)
+{
     PlumePHP::app()->log($msg, $context, $level, $wf);
 }
+/**
+ * Gets the exception stack
+ */
+function T($e, $offset = 9)
+{
+    $removeThisCall = false;
+    if (empty($e) || !is_a($e, 'Exception')) {
+        $e = new Exception();
+        $removeThisCall = true;
+    }
+
+    $trace = explode("\n", $e->getTraceAsString());
+    // reverse array to make steps line up chronologically
+    $trace = array_reverse($trace);
+    $trace = array_slice($trace, $offset);
+    if ($removeThisCall) {
+        array_pop($trace); // remove call to this method
+    }
+
+    $length = count($trace);
+    $result = [];
+    for ($i = 0; $i < $length; $i++) {
+        // replace '#someNum' with '$i)', set the right ordering
+        $result[] = ($i + 1) . ')' . substr($trace[$i], strpos($trace[$i], ' '));
+    }
+
+    return "\t" . implode("\n\t", $result);
+}
+/**
+ * Error log output
+ * @param string $prefix The prefix of message
+ * @param \Exception $e The exception object
+ */
+function E(string $prefix, \Exception $e)
+{
+    L($prefix . $e->getMessage() . PHP_EOL . T($e), [], 'ERROR', true);
+}
+
 /**
  * The PlumePHP class is a static representation of the framework.
  *
@@ -130,7 +209,7 @@ function L($msg, array $context = array(), $level = 'DEBUG', $wf = false) {
  * @method  static set($key, $value) Sets a variable.
  * @method  static has($key) Checks if a variable is set.
  * @method  static clear([$key]) Clears a variable.
- * @method  static log($msg, array $context = array(), $level = 'DEBUG', $wf = false) logging.
+ * @method  static log($msg, array $context = [], $level = 'DEBUG', $wf = false) logging.
  */
 class PlumePHP
 {
@@ -141,9 +220,25 @@ class PlumePHP
     private static $engine;
 
     // Don't allow object instantiation
-    private function __construct() {}
-    private function __destruct() {}
-    private function __clone() {}
+    private function __construct()
+    {
+    }
+
+    private function __destruct()
+    {
+    }
+
+    private function __clone()
+    {
+    }
+
+    /**
+     * Starts the HTTP Server.
+     */
+    public static function runHTTPServer(array $options = [])
+    {
+        PlumeHttpServer::runQuickly($options);
+    }
 
     /**
      * Handles calls to static methods.
@@ -152,7 +247,7 @@ class PlumePHP
      * @return mixed Callback results
      * @throws \Exception
      */
-    public static function __callStatic($name, $params)
+    public static function __callStatic(string $name, array $params)
     {
         return PlumeEvent::invokeMethod([self::app(), $name], $params);
     }
@@ -160,7 +255,7 @@ class PlumePHP
     /**
      * @return PlumeEngine Application instance
      */
-    public static function app()
+    public static function app(): PlumeEngine
     {
         static $initialized = false;
         if (!$initialized) {
@@ -175,7 +270,7 @@ class PlumePHP
  * The Collection class allows you to access a set of data
  * using both array and object notation.
  */
-class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
+class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSerializable
 {
     /**
      * Collection data.
@@ -288,7 +383,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
     /**
      * Gets current collection item.
      * @return mixed Value
-     */ 
+     */
     public function current()
     {
         return current($this->data);
@@ -297,7 +392,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
     /**
      * Gets current collection key.
      * @return mixed Value
-     */ 
+     */
     public function key()
     {
         return key($this->data);
@@ -306,8 +401,8 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
     /**
      * Gets the next collection value.
      * @return mixed Value
-     */ 
-    public function next() 
+     */
+    public function next()
     {
         return next($this->data);
     }
@@ -315,11 +410,11 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
     /**
      * Checks if the current collection key is valid.
      * @return bool Key status
-     */ 
+     */
     public function valid()
     {
         $key = key($this->data);
-        return ($key !== NULL && $key !== FALSE);
+        return ($key !== null && $key !== false);
     }
 
     /**
@@ -359,6 +454,16 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable
     }
 
     /**
+     * Gets the collection data which can be serialized to JSON
+     *
+     * @return array Collection data which can be serialized by <b>json_encode</b>
+     */
+    public function jsonSerialize()
+    {
+        return $this->data;
+    }
+
+    /**
      * Removes all items from the collection.
      */
     public function clear()
@@ -395,10 +500,10 @@ class PlumeLoader
     public function __construct()
     {
         // composer autoload
-        if (file_exists(VENDOR_PATH.DS.'autoload.php')) {
+        if (file_exists(VENDOR_PATH . DS . 'autoload.php')) {
             $name = 'composer';
             $class = 'Composer';
-            $this->instances[$name] = include(VENDOR_PATH.DS.'autoload.php');
+            $this->instances[$name] = include(VENDOR_PATH . DS . 'autoload.php');
             $this->classes[$name] = [$class, [], null];
         }
 
@@ -412,17 +517,17 @@ class PlumeLoader
      * @param array $params Class initialization parameters
      * @param callback $callback Function to call after object instantiation
      */
-    public function register($name, $class, array $params = [], $callback = null)
+    public function register(string $name, $class, array $params = [], callable $callback = null)
     {
         unset($this->instances[$name]);
         $this->classes[$name] = [$class, $params, $callback];
     }
 
     /**
-     * Unregisters a class.
+     * Unregister a class.
      * @param string $name Registry name
      */
-    public function unregister($name)
+    public function unregister(string $name)
     {
         unset($this->classes[$name]);
     }
@@ -434,7 +539,7 @@ class PlumeLoader
      * @return object Class instance
      * @throws \Exception
      */
-    public function load($name, $shared = true)
+    public function load(string $name, bool $shared = true)
     {
         $obj = null;
         if (isset($this->classes[$name])) {
@@ -450,7 +555,7 @@ class PlumeLoader
             }
 
             if ($callback && (!$shared || !$exists)) {
-                $ref = array(&$obj);
+                $ref = [&$obj];
                 call_user_func_array($callback, $ref);
             }
         }
@@ -464,7 +569,7 @@ class PlumeLoader
      * @param string $name Instance name
      * @return object Class instance
      */
-    public function getInstance($name)
+    public function getInstance(string $name)
     {
         return isset($this->instances[$name]) ? $this->instances[$name] : null;
     }
@@ -509,7 +614,7 @@ class PlumeLoader
      * @param string $name Registry name
      * @return mixed Class information or null if not registered
      */
-    public function get($name)
+    public function get(string $name)
     {
         return isset($this->classes[$name]) ? $this->classes[$name] : null;
     }
@@ -530,7 +635,7 @@ class PlumeLoader
      * @param bool $enabled Enable/disable autoloading
      * @param array $dirs Autoload directories
      */
-    public static function autoload($enabled = true, $dirs = [])
+    public static function autoload(bool $enabled = true, $dirs = [])
     {
         if (!$enabled) {
             spl_autoload_unregister([__CLASS__, 'loadClass']);
@@ -547,11 +652,11 @@ class PlumeLoader
      * Autoloads classes.
      * @param string $class Class name
      */
-    public static function loadClass($class)
+    public static function loadClass(string $class)
     {
-        $class_file = str_replace(['\\', '_'], '/', $class).'.php';
+        $class_file = str_replace(['\\', '_'], '/', $class) . '.php';
         foreach (self::$dirs as $dir) {
-            $file = $dir.'/'.$class_file;
+            $file = $dir . '/' . $class_file;
             if (file_exists($file)) {
                 require $file;
                 return;
@@ -569,8 +674,10 @@ class PlumeLoader
             foreach ($dir as $value) {
                 self::addDirectory($value);
             }
-        } else if (is_string($dir)) {
-            if (!in_array($dir, self::$dirs)) self::$dirs[] = $dir;
+        } elseif (is_string($dir)) {
+            if (!in_array($dir, self::$dirs)) {
+                self::$dirs[] = $dir;
+            }
         }
     }
 }
@@ -623,7 +730,7 @@ class PlumeRoute
      * @param array $methods HTTP methods
      * @param boolean $pass Pass self in callback parameters
      */
-    public function __construct($pattern, $callback, $methods, $pass)
+    public function __construct(string $pattern, callable $callback, array $methods, bool $pass)
     {
         $this->pattern = $pattern;
         $this->callback = $callback;
@@ -637,7 +744,7 @@ class PlumeRoute
      * @param boolean $case_sensitive Case sensitive matching
      * @return boolean Match status
      */
-    public function matchUrl($url, $case_sensitive = false)
+    public function matchUrl(string $url, bool $case_sensitive = false): bool
     {
         // Wildcard or exact match
         if ($this->pattern === '*' || $this->pattern === $url) {
@@ -652,23 +759,27 @@ class PlumeRoute
             $len = strlen($url);
             $count = substr_count($this->pattern, '/');
             for ($i = 0; $i < $len; $i++) {
-                if ($url[$i] == '/') $n++;
-                if ($n == $count) break;
+                if ($url[$i] == '/') {
+                    $n++;
+                }
+                if ($n == $count) {
+                    break;
+                }
             }
 
-            $this->splat = (string)substr($url, $i+1);
+            $this->splat = (string) substr($url, $i+1);
         }
 
         // Build the regex for matching
         $regex = str_replace([')','/*'], [')?','(/?|/.*?)'], $this->pattern);
         $regex = preg_replace_callback(
             '#@([\w]+)(:([^/\(\)]*))?#',
-            function($matches) use (&$ids) {
+            function ($matches) use (&$ids) {
                 $ids[$matches[1]] = null;
                 if (isset($matches[3])) {
-                    return '(?P<'.$matches[1].'>'.$matches[3].')';
+                    return '(?P<' . $matches[1] . '>' . $matches[3] . ')';
                 }
-                return '(?P<'.$matches[1].'>[^/\?]+)';
+                return '(?P<' . $matches[1] . '>[^/\?]+)';
             },
             $regex
         );
@@ -682,7 +793,7 @@ class PlumeRoute
         }
 
         // Attempt to match route and named parameters
-        if (preg_match('#^'.$regex.'(?:\?.*)?$#'.(($case_sensitive) ? '' : 'i'), $url, $matches)) {
+        if (preg_match('#^' . $regex . '(?:\?.*)?$#' . (($case_sensitive) ? '' : 'i'), $url, $matches)) {
             foreach ($ids as $k => $v) {
                 $this->params[$k] = (array_key_exists($k, $matches)) ? urldecode($matches[$k]) : null;
             }
@@ -699,15 +810,15 @@ class PlumeRoute
      * @param string $method HTTP method
      * @return bool Match status
      */
-    public function matchMethod($method)
+    public function matchMethod(string $method): bool
     {
-        return count(array_intersect(array($method, '*'), $this->methods)) > 0;
+        return count(array_intersect([$method, '*'], $this->methods)) > 0;
     }
 }
 /**
  * The PlumeRouter class is responsible for routing an HTTP request to
  * an assigned callback function. The PlumeRouter tries to match the
- * requested URL against a series of URL patterns. 
+ * requested URL against a series of URL patterns.
  */
 class PlumeRouter
 {
@@ -750,15 +861,16 @@ class PlumeRouter
     /**
      * Maps a URL pattern to a callback function.
      * @param string $pattern URL pattern to match
-     * @param callback $callback Callback function
+     * @param callable $callback Callback function
      * @param boolean $pass_route Pass the matching route object to the callback
      */
-    public function map($pattern, $callback, $pass_route = false)
+    public function map(string $pattern, callable $callback, bool $pass_route = false)
     {
         $url = $pattern;
         $methods = ['*'];
         if (strpos($pattern, ' ') !== false) {
             list($method, $url) = explode(' ', trim($pattern), 2);
+            $url = trim($url);
             $methods = explode('|', $method);
         }
 
@@ -849,7 +961,7 @@ class PlumeView
      * Constructor.
      * @param string $path Path to templates directory
      */
-    public function __construct($path = '.')
+    public function __construct(string $path = '.')
     {
         $this->path = $path;
     }
@@ -859,7 +971,7 @@ class PlumeView
      * @param string $key Key
      * @return mixed Value
      */
-    public function get($key)
+    public function get(string $key)
     {
         return isset($this->vars[$key]) ? $this->vars[$key] : null;
     }
@@ -867,7 +979,7 @@ class PlumeView
     /**
      * Sets a template variable.
      * @param mixed $key Key
-     * @param string $value Value
+     * @param mixed $value Value
      */
     public function set($key, $value = null)
     {
@@ -885,7 +997,7 @@ class PlumeView
      * @param string $key Key
      * @return boolean If key exists
      */
-    public function has($key)
+    public function has(string $key): bool
     {
         return isset($this->vars[$key]);
     }
@@ -907,23 +1019,23 @@ class PlumeView
      * Renders a template.
      * @param string $file Template file
      * @param array $data Template data
-     * @param string|false $layout layout file
+     * @param string $layout layout file
      * @throws \Exception If template not found
      */
-    public function render($file, $data = null, $layout = 'layout')
+    public function render(string $file, array $data = [], string $layout = 'layout')
     {
         $this->content = $this->getTemplate($file);
         if (!file_exists($this->content)) {
             throw new \Exception("Template file not found: {$this->content}.");
         }
 
-        if (is_array($data)) {
+        if ($data) {
             $this->vars = array_merge($this->vars, $data);
         }
 
         extract($this->vars);
         // layout为false，表示不使用布局文件
-        if ($layout === false) {
+        if ($layout == '') {
             include $this->content;
         } else {
             // 默认使用'.tpl.php'后缀
@@ -940,10 +1052,10 @@ class PlumeView
      * Gets the output of a template.
      * @param string $file Template file
      * @param array $data Template data
-     * @param string|false $layout layout file, default false
+     * @param string $layout layout file, default false
      * @return string Output of template
      */
-    public function fetch($file, $data = null, $layout = false)
+    public function fetch(string $file, array $data = [], string $layout = ''): string
     {
         ob_start();
 
@@ -957,28 +1069,40 @@ class PlumeView
      * @param string $file Template file
      * @return bool Template file exists
      */
-    public function exists($file)
+    public function exists(string $file): bool
     {
         return file_exists($this->getTemplate($file));
     }
 
     /**
      * Gets the full path to a template file.
-     * @param string $file Template file
+     * E.g.:
+     * // in app settings files
+     * PlumePHP::set('theme.path', '/home/myrootfolder/public/themes/current_theme')
+     * 
+     * PlumePHP::render('theme.path::myview', $params);
+     * @param string $file Template file with prefix
      * @return string Template file location
      */
-    public function getTemplate($file)
+    public function getTemplate(string $file): string
     {
         $ext = $this->extension;
         if (!empty($ext) && (substr($file, -1 * strlen($ext)) != $ext)) {
             $file .= $ext;
         }
 
+        $parts = explode("::", $file);
+        if (count($parts) == 2) {
+            $base_path_key = $parts[0];
+            $file_path = $parts[1];
+            return rtrim(PlumePHP::get($base_path_key), "/") . "/" . $file_path;
+        }
+
         if ((substr($file, 0, 1) == '/')) {
             return $file;
         }
 
-        return $this->path.DS.$file;
+        return $this->path . DS . $file;
     }
 
     /**
@@ -986,38 +1110,38 @@ class PlumeView
      * @param string $str String to escape
      * @return string Escaped string
      */
-    public function e($str)
+    public function e(string $str)
     {
         echo htmlentities($str);
     }
 
     /**
-     * assets管理
-     * @param $asset_str string 资源地址
-     * @param $prefix string 目录前缀
-     * @param $output bool 是否输出
+     * Assets management
+     * @param $asset_str string The asset url
+     * @param $prefix string The prefix directory
+     * @param $output bool Whether to output
      * @return string
      */
-    public function asset($asset_str = '', $prefix = '/assets', $output = false)
+    public function asset(string $asset_str = '', string $prefix = '/assets', bool $output = false): string
     {
-        // 相对web根目录
+        // Relative web root
         $asset_name = '';
         if (strpos($asset_str, '/') === 0) {
             $asset_name = $prefix . rtrim($asset_str, '/');
         } else {
-            // 所有的静态资源限定在public目录下
+            // All static resources are limited to the public directory
             $asset_name = '/' . ltrim($prefix, '/') . trim($asset_str, '/');
         }
 
         $assetVersion = C('ASSETS_VERSION');
         if ($assetVersion) {
-            $asset_name .= strrpos($asset_name, '?') > 0 ? '&_v='.$assetVersion : '?_v='.$assetVersion;
+            $asset_name .= strrpos($asset_name, '?') > 0 ? '&_v=' . $assetVersion : '?_v=' . $assetVersion;
         }
 
         if ($output === true) {
             if (strrpos($asset_name, '.js') > 0) {
                 return "<script src='{$asset_name}'></script>";
-            } else if (strrpos($asset_name, '.css') > 0) {
+            } elseif (strrpos($asset_name, '.css') > 0) {
                 return "<link rel='stylesheet' href='{$asset_name}' type='text/css'>";
             }
         }
@@ -1025,7 +1149,7 @@ class PlumeView
     }
 }
 /**
- * 总控类
+ * The plume engine
  */
 class PlumeEngine
 {
@@ -1068,7 +1192,7 @@ class PlumeEngine
      * @return mixed Callback results
      * @throws \Exception
      */
-    public function __call($name, $params)
+    public function __call(string $name, array $params)
     {
         $callback = $this->dispatcher->get($name);
         if (is_callable($callback)) {
@@ -1079,7 +1203,7 @@ class PlumeEngine
             throw new \Exception("{$name} must be a mapped method.");
         }
 
-        $shared = (!empty($params)) ? (bool)$params[0] : true;
+        $shared = (!empty($params)) ? (bool) $params[0] : true;
         return $this->loader->load($name, $shared);
     }
 
@@ -1100,40 +1224,44 @@ class PlumeEngine
         }
 
         // Register default components
-        $this->loader->register('request', 'PlumeRequest');
-        $this->loader->register('response', 'PlumeResponse');
+        if (!IS_CLI) {
+            $this->loader->register('request', 'PlumeRequest');
+            $this->loader->register('response', 'PlumeResponse');
+            $this->loader->register('view', 'PlumeView', [], function ($view) use ($self) {
+                $view->path = $self->get('plumephp.views.path');
+                $view->extension = $self->get('plumephp.views.extension');
+            });
+        }
+
         $this->loader->register('router', 'PlumeRouter');
         $this->loader->register('logger', 'PlumeLogger');
-        $this->loader->register('view', 'PlumeView', [], function($view) use ($self) {
-            $view->path = $self->get('plumephp.views.path');
-            $view->extension = $self->get('plumephp.views.extension');
-        });
-
         // Register framework methods
         $methods = [
             'start', 'stop', 'route', 'halt', 'error', 'notFound',
             'render', 'json', 'jsonp', 'log'
         ];
         foreach ($methods as $name) {
-            $this->dispatcher->set($name, [$this, '_'.$name]);
+            $this->dispatcher->set($name, [$this, '_' . $name]);
         }
 
         // Default configuration settings
-        $this->set('plumephp.base_url', null);
         $this->set('plumephp.case_sensitive', false);
         $this->set('plumephp.handle_errors', true);
         $this->set('plumephp.log_errors', true);
-        $this->set('plumephp.views.path', './views');
-        $this->set('plumephp.views.extension', '.tpl.php');
+        if (!IS_CLI) {
+            $this->set('plumephp.base_url', null);
+            $this->set('plumephp.views.path', './views');
+            $this->set('plumephp.views.extension', '.tpl.php');
+        }
 
-        // Startup configurationconfiguration
-        $this->before('start', function() use ($self) {
+        // Startup configuration
+        $this->before('start', function () use ($self) {
             // Enable error handling
             if ($self->get('plumephp.handle_errors')) {
-                set_error_handler(array($self, 'handleError'));
-                set_exception_handler(array($self, 'handleException'));
+                set_error_handler([$self, 'handleError']);
+                set_exception_handler([$self, 'handleException']);
             }
-            // Set case-sensitivitysensitivity
+            // Set case-sensitivity
             $self->router()->case_sensitive = $self->get('plumephp.case_sensitive');
         });
 
@@ -1147,8 +1275,8 @@ class PlumeEngine
     /**
      * Custom error handler. Converts errors into exceptions.
      * @param int $errno Error number
-     * @param int $errstr Error string
-     * @param int $errfile Error file name
+     * @param string $errstr Error string
+     * @param string $errfile Error file name
      * @param int $errline Error file line number
      * @throws \ErrorException
      */
@@ -1177,7 +1305,7 @@ class PlumeEngine
      * @param callback $callback Callback function
      * @throws \Exception If trying to map over a framework method
      */
-    public function map($name, $callback)
+    public function map(string $name, $callback)
     {
         if (method_exists($this, $name)) {
             throw new \Exception('Cannot override an existing framework method.');
@@ -1193,7 +1321,7 @@ class PlumeEngine
      * @param callback $callback Function to call after object instantiation
      * @throws \Exception If trying to map over a framework method
      */
-    public function register($name, $class, array $params = [], $callback = null)
+    public function register(string $name, string $class, array $params = [], $callback = null)
     {
         if (method_exists($this, $name)) {
             throw new \Exception('Cannot override an existing framework method.');
@@ -1207,7 +1335,7 @@ class PlumeEngine
      * @param string $name Method name
      * @param callback $callback Callback function
      */
-    public function before($name, $callback)
+    public function before(string $name, $callback)
     {
         $this->dispatcher->hook($name, 'before', $callback);
     }
@@ -1217,7 +1345,7 @@ class PlumeEngine
      * @param string $name Method name
      * @param callback $callback Callback function
      */
-    public function after($name, $callback)
+    public function after(string $name, $callback)
     {
         $this->dispatcher->hook($name, 'after', $callback);
     }
@@ -1227,9 +1355,11 @@ class PlumeEngine
      * @param string $key Key
      * @return mixed
      */
-    public function get($key = null)
+    public function get(string $key = null)
     {
-        if ($key === null) return $this->vars;
+        if ($key === null) {
+            return $this->vars;
+        }
         return isset($this->vars[$key]) ? $this->vars[$key] : null;
     }
 
@@ -1254,7 +1384,7 @@ class PlumeEngine
      * @param string $key Key
      * @return bool Variable status
      */
-    public function has($key)
+    public function has(string $key): bool
     {
         return isset($this->vars[$key]);
     }
@@ -1263,7 +1393,7 @@ class PlumeEngine
      * Unsets a variable. If no key is passed in, clear all variables.
      * @param string $key Key
      */
-    public function clear($key = null)
+    public function clear(string $key = null)
     {
         if (is_null($key)) {
             $this->vars = [];
@@ -1276,7 +1406,7 @@ class PlumeEngine
      * Adds a path for class autoloading.
      * @param string $dir Directory path
      */
-    public function path($dir)
+    public function path(string $dir)
     {
         $this->loader->addDirectory($dir);
     }
@@ -1284,22 +1414,22 @@ class PlumeEngine
     /*** Extensible Methods ***/
 
     /**
-     * Starts the framework.
+     * Starts the framework engine.
      * @throws \Exception
      */
     public function _start()
     {
         $dispatched = false;
         $self = $this;
-        $request = $this->request();
-        $response = $this->response();
-        $router = $this->router();
 
         // Allow filters to run
-        $this->after('start', function() use ($self) {
+        $this->after('start', function () use ($self) {
             $self->stop();
         });
 
+        $request = $this->request();
+        $response = $this->response();
+        $router = $this->router();
         // Flush any existing output
         if (ob_get_length() > 0) {
             $response->write(ob_get_clean());
@@ -1323,7 +1453,9 @@ class PlumeEngine
             );
 
             $dispatched = true;
-            if (!$continue) break;
+            if (!$continue) {
+                break;
+            }
 
             $router->next();
             $dispatched = false;
@@ -1339,7 +1471,7 @@ class PlumeEngine
      * @param int $code HTTP status code
      * @throws \Exception
      */
-    public function _stop($code = null)
+    public function _stop(int $code = null)
     {
         $response = $this->response();
         if (!$response->sent()) {
@@ -1347,7 +1479,11 @@ class PlumeEngine
                 $response->status($code);
             }
 
-            $response->write(ob_get_clean());
+            $data = ob_get_clean();
+            if ($data !== false) {
+                $response->write($data);
+            }
+
             $response->send();
         }
     }
@@ -1358,7 +1494,7 @@ class PlumeEngine
      * @param callback $callback Callback function
      * @param boolean $pass_route Pass the matching route object to the callback
      */
-    public function _route($pattern, $callback, $pass_route = false)
+    public function _route(string $pattern, $callback, bool $pass_route = false)
     {
         $this->router()->map($pattern, $callback, $pass_route);
     }
@@ -1368,9 +1504,9 @@ class PlumeEngine
      * @param int $code HTTP status code
      * @param string $message Response message
      */
-    public function _halt($code = 200, $message = '')
+    public function _halt(int $code = 200, string $message = '')
     {
-        if (PHP_SAPI == 'cli') {
+        if (IS_CLI) {
             echo date('H:i:s'), ', Msg:' . $message, PHP_EOL;
             exit(255);
         }
@@ -1389,19 +1525,25 @@ class PlumeEngine
      */
     public function _error($e)
     {
-        $this->_log('Msg: '.$e->getMessage().
-            ', Code: '.$e->getCode().
-            ', Trace: '.PHP_EOL.$e->getTraceAsString(), [], 'ERROR', true);
+        $this->_log('Msg: ' . $e->getMessage() .
+            ', Code: ' . $e->getCode() .
+            ', Trace: ' . PHP_EOL . $e->getTraceAsString(), [], 'ERROR', true);
+
+        if (IS_CLI) {
+            return;
+        }
 
         if ($this->get('plumephp.env') == 'production') {
-            $msg = sprintf('<h1>500 Internal Server Error</h1>'.
+            $msg = sprintf(
+                '<h1>500 Internal Server Error</h1>' .
                 '<h3>%s (%s)</h3>',
                 $e->getMessage(),
                 $e->getCode()
             );
         } else {
-            $msg = sprintf('<h1>500 Internal Server Error</h1>'.
-                '<h3>%s (%s)</h3>'.
+            $msg = sprintf(
+                '<h1>500 Internal Server Error</h1>' .
+                '<h3>%s (%s)</h3>' .
                 '<pre>%s</pre>',
                 $e->getMessage(),
                 $e->getCode(),
@@ -1431,8 +1573,8 @@ class PlumeEngine
             ->clear()
             ->status(404)
             ->write(
-                '<h1>404 Not Found</h1>'.
-                '<h3>The page you have requested could not be found.</h3>'.
+                '<h1>404 Not Found</h1>' .
+                '<h3>The page you have requested could not be found.</h3>' .
                 str_repeat(' ', 512)
             )
             ->send();
@@ -1443,10 +1585,10 @@ class PlumeEngine
      * @param string $file Template file
      * @param array $data Template data
      * @param string $key View variable name
-     * @param string|false $layout layout file, default false
+     * @param string $layout layout file
      * @throws \Exception
      */
-    public function _render($file, $data = null, $key = null, $layout = false)
+    public function _render(string $file, array $data = null, string $key = null, string $layout = '')
     {
         if ($key !== null) {
             $this->view()->set($key, $this->view()->fetch($file, $data, $layout));
@@ -1466,20 +1608,19 @@ class PlumeEngine
      */
     public function _json(
         $data,
-        $code = 200,
-        $encode = true,
-        $charset = 'utf-8',
-        $option = JSON_UNESCAPED_UNICODE
-    )
-    {
+        int $code = 200,
+        bool $encode = true,
+        string $charset = 'utf-8',
+        int $option = JSON_UNESCAPED_UNICODE
+    ) {
         $json = ($encode) ? json_encode($data, $option) : $data;
         $this->response()
             ->status($code)
-            ->header('Content-Type', 'application/json; charset='.$charset)
+            ->header('Content-Type', 'application/json; charset=' . $charset)
             ->write($json)
             ->send();
     }
-	
+
     /**
      * Sends a JSONP response.
      * @param mixed $data JSON data
@@ -1492,102 +1633,178 @@ class PlumeEngine
      */
     public function _jsonp(
         $data,
-        $param = 'jsonp',
-        $code = 200,
-        $encode = true,
-        $charset = 'utf-8',
-        $option = JSON_UNESCAPED_UNICODE
-    )
-    {
+        string $param = 'jsonp',
+        int $code = 200,
+        bool $encode = true,
+        string $charset = 'utf-8',
+        int $option = JSON_UNESCAPED_UNICODE
+    ) {
         $json = ($encode) ? json_encode($data, $option) : $data;
         $callback = $this->request()->query[$param];
         $this->response()
             ->status($code)
-            ->header('Content-Type', 'application/javascript; charset='.$charset)
-            ->write($callback.'('.$json.');')
+            ->header('Content-Type', 'application/javascript; charset=' . $charset)
+            ->write($callback . '(' . $json . ');')
             ->send();
     }
 
     /**
-     * 业务调用接口
-     * @param string $bizpath 调用地址
+     * Business invocation
+     *
+     * @param string $bizPath The business path
      * @return mixed
      */
-    public function biz($bizpath = '')
+    public function biz(array $params = [])
     {
         $startTime = microtime(true);
 
-        $ar = new PlumeParam();
-        L("[biz]request: ".$ar);
-
-        if (empty($bizpath) && $ar->has('path')) {
-            $bizpath = $ar->path;
+        $ar = new PlumeParam($params);
+        L('[biz]request: ' . $ar);
+        if (!$ar->has('path') || !$ar->path) {
+            throw new \Exception('Wrong parameter format, missing path');
         }
 
-        // bizpath的特殊字符处理
-        $bizpath = str_replace("..", "", $bizpath);
-        $bizpath = str_replace("/", "", $bizpath);
-        $bizpath = str_replace("\\", "", $bizpath);
-        $names = explode('.', $bizpath, 20);
+        // Special character processing
+        $bizPath = str_replace('..', '', $ar->path);
+        $bizPath = str_replace('/', '', $bizPath);
+        $bizPath = str_replace('\\', '', $bizPath);
+        $names = explode('.', $bizPath, 20);
         $count = count($names);
         if ($count < 2) {
-            throw new \Exception("参数格式不对，缺少路径或函数名，bizpath: ".$bizpath);
+            throw new \Exception('Wrong parameter format, missing path or function name, biz path: ' . $bizPath);
         }
 
-        // 第一个是模块名称
+        // The first is the module name
         $module = $names[0];
-        if (!file_exists(APP_PATH.DS.$module)) {
+        if (!file_exists(APP_PATH . DS . $module)) {
             $module = PlumePHP::get('plumephp.default.module');
         } else {
             $module = array_shift($names);
         }
 
-        // 最后一个是需要调用的函数
+        // The last one is the function that needs to be called
         $func = array_pop($names);
-        $classname = $names;
-        // class file使用.biz.php后缀
-        $class_file = APP_PATH.DS.$module.DS.'biz'.DS.implode(DS, $classname).'.biz.php';
+        // Class file uses the .biz.php suffix
+        $class_file = APP_PATH . DS . $module . DS . 'biz' . DS . implode(DS, $names) . '.biz.php';
         if (!file_exists($class_file)) {
-            throw new \Exception('biz class not found:'.implode('.', $classname)."::".$func);
+            throw new \Exception('biz class not found:' . implode('.', $names) . '::' . $func);
         }
 
-        // 加载模块文件，使用.boot.php后缀
-        I(APP_PATH.DS.$module.DS.$module.'.boot.php', true);
+        // Load the module boot file which uses the .boot.php suffix
+        I(APP_PATH . DS . $module . DS . $module . '.boot.php', true);
 
-        // 加载业务文件
+        // Load the biz file
         require_once($class_file);
 
-        // 类名，使用biz_$module名称前缀
-        $className = 'biz_'.$module.'_'.implode('_', $classname);
-        L('[biz]class: '.$className.'::'.$func.' call start');
+        // Class name which uses biz_$module prefix
+        $className = 'biz_' . $module . '_' . implode('_', $names);
+        L('[biz]class: ' . $className . '::' . $func . ' call start');
+
+        $ar->module = $module;
+        $ar->class = $className;
+        $ar->func = $func;
 
         if (method_exists($className, 'beforeBiz')) {
-            call_user_func([$className, 'beforeBiz'], $ar);
+            $className::beforeBiz($ar);
         }
 
         if (!method_exists($className, $func)) {
-            throw new \Exception($className."::".$func.' is not exist');
+            throw new \Exception($className . '::' . $func . ' is not exist');
         }
 
-        $user_func_data = call_user_func([$className, $func], $ar);
+        $res = call_user_func([$className, $func], $ar);
         if (method_exists($className, 'afterBiz')) {
-            $user_func_data = call_user_func([$className, 'afterBiz'], $ar, $user_func_data);
+            $res = $className::afterBiz($ar, $res);
         }
 
-        L('[biz]class: '.$className.'::'.$func.' call success, cost time: '.round(microtime(true) - $startTime, 3).'s');
+        $result = json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        L('[biz]class: ' . $className . '::' . $func . ' call success, cost time: '
+            . round(microtime(true) - $startTime, 3) . 's'
+            . ', result: ' . substr($result, 0, 3000));
 
-        // 返回请求数据
-        return $user_func_data;
+        // Returns the biz result
+        return $res;
     }
 
     /**
-     * 日志输出
-     * @param string $msg 日志内容
-     * @param array $context 用上下文信息替换记录信息中的占位符，默认为空
-     * @param string $level 日志等级，默认是DEBUG
-     * @param bool $wf 是否记录到单独的wf日志中，默认是false
+     * The PHP CRUD api
      */
-    public function _log($msg, array $context = array(), $level = 'DEBUG', $wf = false) {
+    public function crud()
+    {
+        // Gets the HTTP method, path and body of the request
+        $method = $_SERVER['REQUEST_METHOD'];
+        $request = explode('/', trim($_SERVER['PATH_INFO'], '/'));
+        $input = json_decode(file_get_contents('php://input'), true);
+        if (!$input) $input = array();
+
+        // connect to the mysql database
+        $link = mysqli_connect('localhost', 'php-crud-api', 'php-crud-api', 'php-crud-api');
+        mysqli_set_charset($link,'utf8');
+
+        // retrieve the table and key from the path
+        $table = preg_replace('/[^a-z0-9_]+/i','',array_shift($request));
+        $key = array_shift($request) + 0;
+
+        // escape the columns and values from the input object
+        $columns = preg_replace('/[^a-z0-9_]+/i','',array_keys($input));
+        $values = array_map(function ($value) use ($link) {
+            if ($value===null) return null;
+            return mysqli_real_escape_string($link,(string)$value);
+        }, array_values($input));
+
+        // build the SET part of the SQL command
+        $set = '';
+        for ($i=0; $i<count($columns); $i++) {
+            $set .= ($i>0?',' : '') . '`' . $columns[$i] . '`=';
+            $set .= ($values[$i]===null ? 'NULL' : '"' . $values[$i] . '"');
+        }
+
+        // create SQL based on HTTP method
+        switch ($method) {
+        case 'GET':
+            $sql = "select * from `$table`".($key?" WHERE id=$key":''); break;
+        case 'PUT':
+            $sql = "update `$table` set $set where id=$key"; break;
+        case 'POST':
+            $sql = "insert into `$table` set $set"; break;
+        case 'DELETE':
+            // $sql = "delete from `$table` where id=$key"; break;
+            $sql = "update `$table` set `status`=0 where id=$key"; break;
+        }
+
+        // execute SQL statement
+        $result = mysqli_query($link, $sql);
+        // die if SQL statement failed
+        if (!$result) {
+            $this->_halt(404, mysqli_error($link));
+        }
+
+        // print results, insert id or affected row count
+        if ($method == 'GET') {
+            if (!$key) echo '[';
+            for ($i=0;$i<mysqli_num_rows($result);$i++) {
+                echo ($i>0 ? ',' : '').json_encode(mysqli_fetch_object($result));
+            }
+            if (!$key) echo ']';
+        } elseif ($method == 'POST') {
+            echo mysqli_insert_id($link);
+        } else {
+            echo mysqli_affected_rows($link);
+        }
+        // close mysql connection
+        mysqli_close($link);
+    }
+
+    /**
+     * Log output
+     * @param string $msg Log message
+     * @param array $context Replaces the placeholder in the record information with context
+     *              information, which is empty by default
+     * @param string $level Log level, the default is DEBUG
+     * @param bool $wf The default is false to log in a separate wf log
+     */
+    public function _log(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false)
+    {
         $this->logger()->write($msg, $context, $level, $wf);
     }
 
@@ -1596,15 +1813,27 @@ class PlumeEngine
      */
     protected function boot()
     {
-        $env = get_cfg_var("plumephp.env") ? get_cfg_var("plumephp.env") : 'development';
+        // Tries to load .env file
+        $envFile = PLUME_PHP_PATH.DS.'.env';
+        if (!file_exists($envFile)) {
+            $this->_halt(503, "The {$envFile} file is missing.");
+        }
+
+        $envVariables = parse_ini_file($envFile, false, INI_SCANNER_TYPED);
+        if (isset($envVariables['PLUME_PHP_ENV'])) {
+            $env = $envVariables['PLUME_PHP_ENV'];
+        } else {
+            $env = getenv('PLUME_PHP_ENV') ? getenv('PLUME_PHP_ENV') : get_cfg_var('plumephp.env');
+        }
+
         switch ($env) {
         case 'development':
             error_reporting(-1);
-            ini_set('display_errors', 1);
+            ini_set('display_errors', 'On');
             break;
         case 'testing':
         case 'production':
-            ini_set('display_errors', 0);
+            ini_set('display_errors', 'Off');
             error_reporting(-1);
             break;
         default:
@@ -1613,56 +1842,63 @@ class PlumeEngine
 
         $this->set('plumephp.env', $env);
         $this->set('plumephp.default.module', 'web');
-        defined('APP_PATH') or define('APP_PATH', PLUME_PHP_PATH.DS.'application'); // application目录
+
+        defined('APP_PATH') or define('APP_PATH', PLUME_PHP_PATH . DS . 'application');
         if (!is_dir(APP_PATH)) {
-            $this->_halt(503, 'Your application folder path does not appear to be set correctly. Please open the following file and correct this: '
-                .pathinfo(__FILE__, PATHINFO_BASENAME));
+            $this->_halt(503, 'Your application folder path does not appear to be set correctly.'
+                . ' Please open the following file and correct this: ' . pathinfo(__FILE__, PATHINFO_BASENAME));
         }
 
-        defined('CONFIG_PATH') OR define('CONFIG_PATH', PLUME_PHP_PATH.DS.'config'); // config配置目录
-        defined('PUBLIC_PATH') OR define('PUBLIC_PATH', PLUME_PHP_PATH.DS.'public'); // public对外访问的目录
-        defined('IS_CLI') OR define('IS_CLI', PHP_SAPI=='cli' ? 1 : 0);
+        defined('CONFIG_PATH') or define('CONFIG_PATH', PLUME_PHP_PATH . DS . 'config');
+        defined('PUBLIC_PATH') or define('PUBLIC_PATH', PLUME_PHP_PATH . DS . 'public');
         if (!IS_CLI) {
-            defined('SITE_DOMAIN') OR define('SITE_DOMAIN', isset($_SERVER['HTTP_HOST']) ? strip_tags($_SERVER['HTTP_HOST']) : '');
-            defined('IS_GET') OR define('IS_GET', $_SERVER['REQUEST_METHOD'] =='GET' ? true : false);
-            defined('IS_POST') OR define('IS_POST', $_SERVER['REQUEST_METHOD'] =='POST' ? true : false);
-            defined('IS_AJAX') OR define('IS_AJAX', (isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+            defined('SITE_DOMAIN') or define('SITE_DOMAIN', isset($_SERVER['HTTP_HOST'])
+                ? strip_tags($_SERVER['HTTP_HOST']) : '');
+            defined('IS_GET') or define('IS_GET', $_SERVER['REQUEST_METHOD'] =='GET' ? true : false);
+            defined('IS_POST') or define('IS_POST', $_SERVER['REQUEST_METHOD'] =='POST' ? true : false);
+            defined('IS_AJAX') or define('IS_AJAX', (isset($_SERVER['HTTP_X_REQUESTED_WITH'])
                 && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') ? true : false);
         }
 
-        // 加载全局配置文件
+        // Loads the global config file
         if (file_exists(CONFIG_PATH . DS . 'config.php')) {
             $conf = require CONFIG_PATH . DS . 'config.php';
-            // 加载环境配置文件
-            if (file_exists(CONFIG_PATH . DS . $env. '.php')) {
+            // Loads the environment file
+            if (file_exists(CONFIG_PATH . DS . $env . '.php')) {
                 $localConf = require CONFIG_PATH . DS . $env . '.php';
                 $conf = array_merge($conf, $localConf);
             }
 
             C($conf);
+            // Use to the .env file to override
+            foreach ($envVariables as $key=>$val) {
+                if (is_array($val)) {
+                    C($val);
+                } else {
+                    C($key, $val);
+                }
+            }
         }
 
-        // session管理
-        if (C('USE_SESSION') == true && session_status() == PHP_SESSION_NONE
+        // session management
+        if (!IS_CLI && C('USE_SESSION') == true && session_status() == PHP_SESSION_NONE
             && !headers_sent($filename, $linenum)) {
             session_start();
         }
 
-        // 设置时区
+        // Sets timezone
         $timezone = C('TIME_ZONE');
         if (empty($timezone)) {
             $timezone = 'Asia/Shanghai';
         }
         date_default_timezone_set($timezone);
 
-        // 加载公共函数
-        I(PLUME_PHP_PATH . DS . 'common.php');
+        // Loads common functions
+        I(__DIR__ . DS . 'common.php');
 
-        // 可以多次调用 register_shutdown_function() ，这些被注册的回调会按照他们注册时的顺序被依次调用。 
-        // 如果你在注册的方法内部调用 exit()， 那么所有处理会被中止，并且其他注册的中止回调也不会再被调用。
-        register_shutdown_function(function() {
+        register_shutdown_function(function () {
             if ($e = error_get_last()) {
-                $msg =  $e['message']. " in " . $e['file'] .' line ' . $e['line'];
+                $msg =  $e['message'] . ' in ' . $e['file'] . ' line ' . $e['line'];
                 if (IS_CLI) {
                     echo $msg, PHP_EOL;
                 }
@@ -1671,14 +1907,8 @@ class PlumeEngine
         });
     }
 
-    // 应用程序入口函数
-    public function run()
-    {
-        return IS_CLI ? $this->runCli() : $this->runWeb();
-    }
-
     // run cli
-    public function runCli()
+    public function runCmd()
     {
         global $argv;
         $args = $this->arguments($argv);
@@ -1687,52 +1917,46 @@ class PlumeEngine
             $module = trim($args['commands']['module']);
         }
 
-        // 加载模块文件
-        I(APP_PATH.DS.$module.DS.$module.'.boot.php', true);
+        // Loads the boot file.
+        I(APP_PATH . DS . $module . DS . $module . '.boot.php', true);
 
         $this->set('plumephp.module', $module);
         $this->set('plumephp.args', $args);
-        // 判断是否存在默认自定义的entry
-        if (defined('PLUME_CUSTOM_ENTRY') && PLUME_CUSTOM_ENTRY) {
-            return;
-        }
-
         $file = 'index';
         if (!empty($args['commands']['file'])) {
             $file = str_replace(['\\', '/'], DS, $args['commands']['file']);
             $file = trim($file, DS);
         }
 
-        $filename = $file.'.cmd.php';
-        $filename = APP_PATH.DS.$module.DS.'console'.DS.$filename;
+        $filename = $file . '.cmd.php';
+        $filename = APP_PATH . DS . $module . DS . 'console' . DS . $filename;
         if (!file_exists($filename)) {
-            $this->_halt(404, '!!! 404 !!! file '.$filename.' not exist');
+            $this->_halt(404, '!!! 404 !!! file ' . $filename . ' not exist');
         }
 
         $this->set('plumephp.file', $file);
-        // 加载执行文件
+        // Loads the file.
         require($filename);
-        $className = $module.'_'.str_replace(['\\', '/'], '_', $file).'_cmd';
+        $className = $module . '_' . str_replace(['\\', '/'], '_', $file) . '_cmd';
 
-        L('[cli]class name: '.$className.', args: '.json_encode($args));
+        L('[cli]class name: ' . $className . ', args: ' . json_encode($args));
 
         if (!class_exists($className)) {
-            $this->_halt(404, '!!! 404 !!! class not exist: '.$className);
+            $this->_halt(404, '!!! 404 !!! class not exist: ' . $className);
         }
 
         $actionInstance = new $className();
         if (!method_exists($actionInstance, 'run')) {
-            $this->_halt(404, '!!! 404 !!! no run method: '.$className);
+            $this->_halt(404, '!!! 404 !!! no run method: ' . $className);
         }
 
         return $actionInstance->run();
     }
 
-    // cli的参数处理
-    protected function arguments($args)
+    protected function arguments(array $args): array
     {
         array_shift($args);
-        $args = join($args, ' ');
+        $args = join(' ', $args);
         preg_match_all('/ (--\w+(?:[^-]+[^\s-])? ) | (-\w+) /x', $args, $match);
         $args = array_shift($match);
         $ret = [
@@ -1747,13 +1971,12 @@ class PlumeEngine
                 $com   = substr(array_shift($value), 2);
                 $value = join($value);
                 $ret['commands'][$com] = !empty($value) ? $value : true;
-            } else if (substr($arg, 0, 1) === '-') {
+            } elseif (substr($arg, 0, 1) === '-') {
                 // Is it a flag? (prefixed with -)
                 $flag = substr($arg, 1);
                 $ret['flags'][] = $flag;
-                // 对于版本命令的特殊处理
                 if ($flag == 'version' || $flag == 'v') {
-                    $this->_halt(200, 'Plume version: '.PLUME_VERSION);
+                    $this->_halt(200, 'Plume version: ' . PLUME_VERSION);
                 }
 
                 if ($flag == 'h' || $flag == 'help') {
@@ -1783,20 +2006,22 @@ EOF;
         return $ret;
     }
 
-    // 缺省路由规则
-    /*** 统一格式
-    http://your.domain.com[/module][/file][/k/v...]
-    说明：
-    1. module,file是对应的目录或文件（不带后缀）
-    2. k为参数名，v为参数值，可重复，如：id/2/dir/xy 表示带2个参数： id=2 并且 dir=xy
-    3. []中括号表示可有可无
-    4. 没有对应的则匹配下一个
-    5. 没有file时缺省对应index.php，有则对应file.php
-    */
-    public function runWeb()
+    /**
+     * Default routing rule with unified format
+     * https://your.domain.com[/module][/file][/k/v...]
+     *
+     * Remark：
+     * 1. Module,file is the corresponding directory or file (without suffix)
+     * 2. K is the parameter name, v is the parameter value, can be repeated,
+     *    such as: id/2/dir/xy with 2 parameters: id=2 and dir=xy
+     * 3. [] brackets indicate dispensable
+     * 4. If no one matches then match with the next one
+     * 5. If there is no file, the default is index.php. If there is file,
+     *    the default is file.php
+     */
+    public function runAction()
     {
         $startTime = microtime(true);
-
         $requestUri = $_SERVER['REQUEST_URI'];
         $vdname = C('VDNAME');
         if (!empty($vdname)) {
@@ -1805,10 +2030,10 @@ EOF;
         } else {
             $urlPath = $requestUri;
         }
-        // 路径别名
-        $pathalias = C("PATH_ALIAS");
+        // Path alias
+        $pathalias = C('PATH_ALIAS');
         if (is_array($pathalias)) {
-            foreach($pathalias as $k => $v) {
+            foreach ($pathalias as $k => $v) {
                 if (strpos($urlPath, $k) !== false) {
                     $urlPath = str_replace($k, $v, $urlPath);
                     break;
@@ -1816,7 +2041,7 @@ EOF;
             }
         }
 
-        // 请求参数
+        // Request parameters
         $args = [];
         $pos = strpos($urlPath, '?');
         if ($pos !== false) {
@@ -1826,80 +2051,80 @@ EOF;
 
         $file = '';
         $module = '';
-        // 防止请求地址超长，最多64个
+        // Prevents request addresses from being too long, up to 64
         $pathnames = explode('/', $urlPath, 64);
-        // 默认首页
+        // The default home page
         if (empty($pathnames) || empty($pathnames[1]) || $pathnames[1] == 'index.php') {
             $module = $this->get('plumephp.default.module');
         } else {
-            // 最左边的表示模块名称
+            // The leftmost represents the module name
             $module = $pathnames[1];
         }
 
         $module = trim($module);
         $this->set('plumephp.module', $module);
         $this->set('plumephp.urlPath', $urlPath);
-        // 加载模块文件{$module}.boot.php，每个模块都有一个启动文件
-        I(APP_PATH.DS.$module.DS.$module.'.boot.php');
-        // 判断是否存在默认自定义的entry
-        if (defined('PLUME_CUSTOM_ENTRY') && PLUME_CUSTOM_ENTRY) {
-            return;
-        }
+        // Loads the module boot file {$module}.boot.php, and each module has a startup file
+        I(APP_PATH . DS . $module . DS . $module . '.boot.php');
 
         $filepath= APP_PATH;
         $namecount = count($pathnames);
-        $index = 0;
-        $preg = "/^([a-z]+)[a-z0-9_]*$/i";
+        $index = 1;
+        $preg = '/^([a-z]+)[a-z0-9_]*$/i';
         for ($index=1; $index<$namecount; $index++) {
-            $name = $pathnames[$index];
+            $name = trim($pathnames[$index]);
             if (!empty($name) && (!preg_match($preg, $name) || strlen($name) > 15)) {
-                $this->_halt(404, '!!! 404(invalid) !!! uri: '.$requestUri.', urlPath: '.$urlPath.', name: '.$name);
+                $this->_halt(404, '!!! 404(invalid) !!! uri: ' . $requestUri . ', urlPath: ' . $urlPath . ', name: ' . $name);
             }
-            // default: index.php，默认首页
+            // default: index.php default home page
             if ($index == 1) {
                 if (empty($name) || $name == 'index.php') {
                     $file = 'index';
                     break;
                 } else {
-                    $filepath .= DS.$name.DS.'actions';
+                    $filepath .= DS . $name . DS . 'actions';
                     continue;
                 }
             }
-            // 默认取当前目录下的index.action.php
+
             if (empty($name)) {
-                if (!file_exists($filepath.DS.'index.action.php')) {
-                    $this->_halt(404, '!!! 404(missing index) !!! uri: '.$requestUri.', urlPath: '.$urlPath);
+                if (!file_exists($filepath . DS . 'index.action.php')) {
+                    $this->_halt(404, '!!! 404(missing index) !!! uri: ' . $requestUri . ', urlPath: ' . $urlPath);
                 }
-                $file .= DS.'index';
+                $file .= DS . 'index';
                 break;
             }
-            // 目录存在，则继续
-            $sPath = $filepath.DS.$name;
+
+            $sPath = $filepath . DS . $name;
             if (file_exists($sPath)) {
-                $filepath .= DS.$name;
-                $file .= DS.$name;
+                $filepath .= DS . $name;
+                $file .= DS . $name;
                 continue;
             }
-            // 查找对应的文件，默认取'.action.php'后缀
+
             $sPath .= '.action.php';
             if (file_exists($sPath)) {
-                $file .= DS.$name;
+                $file .= DS . $name;
                 break;
             } else {
-                $this->_halt(404, '!!! 404 !!! uri='.$requestUri.' parseto:'.$sPath);
+                $this->_halt(404, '!!! 404 !!! uri=' . $requestUri . ' parseto:' . $sPath);
             }
         }
 
         $file = trim($file, DS);
-        // 加载执行文件
-        $actionFile = APP_PATH.DS.$module.DS.'actions'.DS.$file.'.action.php';
+        if (empty($file)) {
+            $file= 'index';
+        }
+
+        // Loads the action file
+        $actionFile = APP_PATH . DS . $module . DS . 'actions' . DS . $file . '.action.php';
         if (!file_exists($actionFile)) {
-            $this->_halt(404, '!!! 404(missing action file) !!! uri: '.$requestUri.' action file: '.$actionFile);
+            $this->_halt(404, '!!! 404(missing action file) !!! uri: ' . $requestUri . ' action file: ' . $actionFile);
         }
 
         require($actionFile);
 
-        // 打包剩余参数
+        // Packaging residual arguments
         for ($i=$index+1; $i<$namecount; $i+=2) {
             $k = $pathnames[$i];
             $v = null;
@@ -1911,30 +2136,34 @@ EOF;
 
         $this->set('plumephp.file', $file);
         $this->set('plumephp.args', $args);
-        $className = $module.'_'.str_replace(DS, '_', $file).'_action';
+        $className = $module . '_' . str_replace(DS, '_', $file) . '_action';
 
-        L('[web]class name:'.$className.', args:'.json_encode($args, JSON_UNESCAPED_UNICODE).
+        L('[web]class name:' . $className . ', args:' . json_encode($args, JSON_UNESCAPED_UNICODE) .
             ', request: ' . json_encode($_REQUEST, JSON_UNESCAPED_UNICODE));
 
         if (!class_exists($className)) {
-            $this->_halt(404, '!!! 404 !!! uri='.$requestUri.'class not exist: '.$className);
+            $this->_halt(404, '!!! 404 !!! uri=' . $requestUri . ' class not exist: ' . $className);
         }
 
         $actionInstance = new $className();
 
-        // 根据动作去找对应的方法
+        // Find the corresponding method according to the action
         if (!method_exists($actionInstance, 'run')) {
-            $this->_halt(404, '!!! 404 !!! uri='.$requestUri.' no run method: '.$className);
+            $this->_halt(404, '!!! 404 !!! uri=' . $requestUri . ' no run method: ' . $className);
         }
 
         $res = $actionInstance->run();
-        L('[web]class name:'.$className.' success, cost time: '.round(microtime(true) - $startTime, 3).'s');
+        L('[web]class name: {class} success, result: {result}, cost: {cost}s', [
+            'class'=>$className,
+            'result'=>substr(json_encode($res, JSON_UNESCAPED_UNICODE), 0, 200),
+            'cost'=>round(microtime(true) - $startTime, 3)
+        ]);
 
         return $res;
     }
 }
 /**
- * 安全Request对象
+ * Secure Request object
  */
 class PlumeRequest
 {
@@ -2022,13 +2251,13 @@ class PlumeRequest
      * Constructor.
      * @param array $config Request configuration
      */
-    public function __construct($config = [])
+    public function __construct(array $config = [])
     {
         // Default properties
         if (empty($config)) {
-            $config = array(
+            $config = [
                 'url' => str_replace('@', '%40', self::getVar('REQUEST_URI', '/')),
-                'base' => str_replace(array('\\',' '), array('/','%20'), dirname(self::getVar('SCRIPT_NAME'))),
+                'base' => str_replace(['\\',' '], ['/','%20'], dirname(self::getVar('SCRIPT_NAME'))),
                 'method' => self::getMethod(),
                 'referrer' => self::getVar('HTTP_REFERER'),
                 'ip' => self::getVar('REMOTE_ADDR'),
@@ -2043,7 +2272,7 @@ class PlumeRequest
                 'files' => new PlumeCollection($_FILES),
                 'secure' => self::getVar('HTTPS', 'off') != 'off',
                 'accept' => self::getVar('HTTP_ACCEPT')
-            );
+            ];
         }
 
         $this->init($config);
@@ -2053,7 +2282,7 @@ class PlumeRequest
      * Initialize request properties.
      * @param array $properties Array of request properties
      */
-    public function init($properties = [])
+    public function init(array $properties = [])
     {
         // Set all the defined properties
         foreach ($properties as $name => $value) {
@@ -2090,7 +2319,7 @@ class PlumeRequest
      * Gets the body of the request.
      * @return string Raw HTTP request body
      */
-    public static function getBody()
+    public static function getBody(): string
     {
         static $body;
         if (!is_null($body)) {
@@ -2099,17 +2328,17 @@ class PlumeRequest
 
         $method = self::getMethod();
         if ($method == 'POST' || $method == 'PUT' || $method == 'PATCH') {
-            $body = file_get_contents('php://input');
+            $body = file_get_contents('php://input') ?? '';
         }
 
-        return $body;
+        return $body ?? '';
     }
 
     /**
      * Gets the request method.
      * @return string
      */
-    public static function getMethod()
+    public static function getMethod(): string
     {
         $method = self::getVar('REQUEST_METHOD', 'GET');
         if (isset($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'])) {
@@ -2127,7 +2356,7 @@ class PlumeRequest
      * @param string $default Default value to substitute
      * @return string Server variable value
      */
-    public static function getVar($var, $default = '')
+    public static function getVar(string $var, $default = '')
     {
         return isset($_SERVER[$var]) ? $_SERVER[$var] : $default;
     }
@@ -2137,7 +2366,7 @@ class PlumeRequest
      * @param string $url URL string
      * @return array Query parameters
      */
-    public static function parseQuery($url)
+    public static function parseQuery(string $url): array
     {
         $params = [];
         $args = parse_url($url);
@@ -2152,16 +2381,16 @@ class PlumeRequest
      * 通关ua判断是否为手机
      * @return bool
      */
-    public function isMobile()
+    public function isMobile(): bool
     {
         //正则表达式,批配不同手机浏览器UA关键词。
         $regex_match = "/(nokia|iphone|android|motorola|^mot\-|softbank|foma|docomo|kddi|up\.browser|up\.link|";
-        $regex_match .= "htc|dopod|blazer|netfront|helio|hosin|huawei|novarra|CoolPad|webos|techfaith|palmsource|";
+        $regex_match .= 'htc|dopod|blazer|netfront|helio|hosin|huawei|novarra|CoolPad|webos|techfaith|palmsource|';
         $regex_match .= "blackberry|alcatel|amoi|ktouch|nexian|samsung|^sam\-|s[cg]h|^lge|ericsson|philips|sagem|wellcom|bunjalloo|maui|";
         $regex_match .= "symbian|smartphone|midp|wap|phone|windows ce|iemobile|^spice|^bird|^zte\-|longcos|pantech|gionee|^sie\-|portalmmm|";
         $regex_match .= "jig\s browser|hiptop|^ucweb|^benq|haier|^lct|opera\s*mobi|opera\*mini|320×320|240×320|176×220";
-        $regex_match .= "|mqqbrowser|juc|iuc|ios|ipad";
-        $regex_match .= ")/i";
+        $regex_match .= '|mqqbrowser|juc|iuc|ios|ipad';
+        $regex_match .= ')/i';
 
         return isset($_SERVER['HTTP_X_WAP_PROFILE']) or isset($_SERVER['HTTP_PROFILE'])
             or preg_match($regex_match, strtolower($_SERVER['HTTP_USER_AGENT']));
@@ -2276,7 +2505,7 @@ class PlumeResponse
      * @return object|int Self reference
      * @throws \Exception If invalid status code
      */
-    public function status($code = null)
+    public function status(int $code = null)
     {
         if ($code === null) {
             return $this->status;
@@ -2297,7 +2526,7 @@ class PlumeResponse
      * @param string $value Header value
      * @return object Self reference
      */
-    public function header($name, $value = null)
+    public function header($name, string $value = null)
     {
         if (is_array($name)) {
             foreach ($name as $k => $v) {
@@ -2323,7 +2552,7 @@ class PlumeResponse
      * @param string $str Response content
      * @return object Self reference
      */
-    public function write($str)
+    public function write(string $str)
     {
         $this->body .= $str;
         return $this;
@@ -2350,17 +2579,17 @@ class PlumeResponse
     {
         if ($expires === false) {
             $this->headers['Expires'] = 'Mon, 26 Jul 1997 05:00:00 GMT';
-            $this->headers['Cache-Control'] = array(
+            $this->headers['Cache-Control'] = [
                 'no-store, no-cache, must-revalidate',
                 'post-check=0, pre-check=0',
                 'max-age=0'
-            );
+            ];
             $this->headers['Pragma'] = 'no-cache';
         } else {
             $expires = is_int($expires) ? $expires : strtotime($expires);
             $this->headers['Expires'] = gmdate('D, d M Y H:i:s', $expires) . ' GMT';
-            $this->headers['Cache-Control'] = 'max-age='.($expires - time());
-            if (isset($this->headers['Pragma']) && $this->headers['Pragma'] == 'no-cache'){
+            $this->headers['Cache-Control'] = 'max-age=' . ($expires - time());
+            if (isset($this->headers['Pragma']) && $this->headers['Pragma'] == 'no-cache') {
                 unset($this->headers['Pragma']);
             }
         }
@@ -2382,32 +2611,27 @@ class PlumeResponse
                     '%s %d %s',
                     (isset($_SERVER['SERVER_PROTOCOL']) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.1'),
                     $this->status,
-                    self::$codes[$this->status]),
+                    self::$codes[$this->status]
+                ),
                 true,
                 $this->status
             );
         }
 
         if ($this->etag) {
-            header('ETag: "'.md5($this->body).'"');
+            header('ETag: "' . md5($this->body) . '"');
         }
 
         // Send other headers
         foreach ($this->headers as $field => $value) {
             if (is_array($value)) {
                 foreach ($value as $v) {
-                    header($field.': '.$v, false);
+                    header($field . ': ' . $v, false);
                 }
             } else {
-                header($field.': '.$value);
+                header($field . ': ' . $value);
             }
         }
-
-        // Send content length
-        // $length = $this->getContentLength();
-        // if ($length > 0) {
-        //     header('Content-Length: '.$length);
-        // }
 
         return $this;
     }
@@ -2451,7 +2675,7 @@ class PlumeResponse
     }
 }
 /**
- * 事件绑定处理逻辑
+ * Event
  */
 class PlumeEvent
 {
@@ -2476,7 +2700,7 @@ class PlumeEvent
      * @return string Output of callback
      * @throws \Exception
      */
-    public function run($name, array $params = [])
+    public function run(string $name, array $params = [])
     {
         $output = '';
 
@@ -2501,7 +2725,7 @@ class PlumeEvent
      * @param string $name Event name
      * @param callback $callback Callback function
      */
-    public function set($name, $callback)
+    public function set(string $name, $callback)
     {
         $this->events[$name] = $callback;
     }
@@ -2511,7 +2735,7 @@ class PlumeEvent
      * @param string $name Event name
      * @return callback $callback Callback function
      */
-    public function get($name)
+    public function get(string $name)
     {
         return isset($this->events[$name]) ? $this->events[$name] : null;
     }
@@ -2521,7 +2745,7 @@ class PlumeEvent
      * @param string $name Event name
      * @return bool Event status
      */
-    public function has($name)
+    public function has(string $name): bool
     {
         return isset($this->events[$name]);
     }
@@ -2531,11 +2755,10 @@ class PlumeEvent
      * all events are removed.
      * @param string $name Event name
      */
-    public function clear($name = null)
+    public function clear(string $name = null)
     {
         if ($name !== null) {
-            unset($this->events[$name]);
-            unset($this->filters[$name]);
+            unset($this->events[$name], $this->filters[$name]);
         } else {
             $this->events = [];
             $this->filters = [];
@@ -2548,7 +2771,7 @@ class PlumeEvent
      * @param string $type Filter type
      * @param callback $callback Callback function
      */
-    public function hook($name, $type, $callback)
+    public function hook(string $name, string $type, $callback)
     {
         $this->filters[$name][$type][] = $callback;
     }
@@ -2560,12 +2783,14 @@ class PlumeEvent
      * @param mixed $output Method output
      * @throws \Exception
      */
-    public function filter($filters, &$params, &$output)
+    public function filter(array $filters, array &$params, &$output)
     {
-        $args = array(&$params, &$output);
+        $args = [&$params, &$output];
         foreach ($filters as $callback) {
             $continue = $this->execute($callback, $args);
-            if ($continue === false) break;
+            if ($continue === false) {
+                break;
+            }
         }
     }
 
@@ -2578,9 +2803,21 @@ class PlumeEvent
      */
     public function execute($callback, array &$params = [])
     {
+        if (is_array($callback) && is_string($callback[0]) && isset($callback[1])) {
+            $classname = $callback[0];
+            $method = $callback[1];
+            if (class_exists($classname)) {
+                $r_method = new ReflectionMethod("$classname::$method");
+                if (!$r_method->isStatic())  //is not a static method
+                    $callback[0] = new $callback[0](); //instantiate object on the fly		    
+            } else {
+                throw new \Exception('The class ' . $callback[0] . ' does not exists!');
+            }
+        }
+
         if (is_callable($callback)) {
             return is_array($callback) ?
-                self::invokeMethod($callback, $params) :
+                self::invokeMethod($callback, $params) : //here, $callback is a string or an object
                 self::callFunction($callback, $params);
         } else {
             throw new \Exception('Invalid callback specified.');
@@ -2629,6 +2866,14 @@ class PlumeEvent
         list($class, $method) = $func;
 
         $instance = is_object($class);
+        if (!$instance && method_exists($class, $method)) {
+            $methodChecker = new \ReflectionMethod($class, $method);
+            if (!$methodChecker->isStatic()) {
+                $class = new $class;
+                $instance = is_object($class);
+            }
+        }
+
         switch (count($params)) {
         case 0:
             return ($instance) ?
@@ -2668,34 +2913,42 @@ class PlumeEvent
         $this->filters = [];
     }
 }
-// 来自前端的视图对象
+// View object
 class PlumeParam
 {
-    private $urlparam;
-    private $inited = false;
-    private function init()
+    public $module;
+    public $class;
+    public $func;
+
+    private $urlparam = [];
+
+    public function __construct(array $params = [])
     {
-        if ($this->inited) return;
-        parse_str($_SERVER['QUERY_STRING'], $this->urlparam);
+        if (!empty($_SERVER['QUERY_STRING'])) {
+            parse_str($_SERVER['QUERY_STRING'], $this->urlparam);
+        }
+
+        if (!empty($_POST)) {
+            $this->urlparam = array_merge($this->urlparam, $_POST);
+        }
+
         // Check for JSON input
         if (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'application/json') === 0) {
             $body = file_get_contents('php://input');
-            if ($body != '') {
+            if ($body) {
                 $data = json_decode($body, true);
-                if ($data != null) {
-                    if (isset($data['jsonrpc']) && !empty($data['params'])) {
-                        $this->urlparam = array_merge($this->urlparam, $data['params']);
-                    } else {
-                        $this->urlparam = array_merge($this->urlparam, $data);
-                    }
+                if ($data) {
+                    $this->urlparam = array_merge($this->urlparam, $data);
                 }
             }
         }
 
-        $this->inited = true;
+        if ($params) {
+            $this->urlparam = array_merge($this->urlparam, $params);
+        }
     }
 
-    public function __get($pn)
+    public function __get(string $pn)
     {
         $v = $this->getValue($pn);
         if (is_string($v)) {
@@ -2704,61 +2957,65 @@ class PlumeParam
         return $v;
     }
 
-    public function __set($pn, $val)
+    public function __set(string $pn, string $val)
     {
-        setcookie($pn, $val);
+        if (!$pn) {
+            return;
+        }
+        $this->urlparam[$pn] = $val;
     }
 
     public function __toString()
     {
-        $this->init();
         return json_encode($this->urlparam, JSON_UNESCAPED_UNICODE);
     }
 
-    public function getValue($pn)
+    public function getValue(string $pn, string $default = '')
     {
-        if (isset($_POST[$pn])) return $_POST[$pn];
-        if (isset($_GET[$pn])) return $_GET[$pn];
-        $this->init();
-        if (isset($this->urlparam[$pn])) return $this->urlparam[$pn];
-        if (isset($_COOKIE[$pn])) return $_COOKIE[$pn];
-        return "";
+        if (isset($this->urlparam[$pn])) {
+            return $this->urlparam[$pn];
+        }
+        return $default;
     }
 
-    public function has($pn)
+    public function has(string $pn): bool
     {
-        if (isset($_POST[$pn])) return true;
-        if (isset($_GET[$pn])) return true;
-        $this->init();
-        if (isset($this->urlparam[$pn])) return true;
-        if (isset($_COOKIE[$pn])) return true;
+        if (isset($this->urlparam[$pn])) {
+            return true;
+        }
         return false;
     }
 
-    public function updateRouteArg($arr)
+    public function updateParams(array $arr)
     {
-        if (is_array($arr) && count($arr) > 0) {
-            $this->init();
-            $this->urlparam = array_merge($this->urlparam, $arr);
+        if (!$arr) {
+            return $this;
         }
+
+        $this->urlparam = array_merge($this->urlparam, $arr);
+        return $this;
+    }
+
+    public function toArray() {
+        return $this->urlparam;
     }
 }
 /**
- * 日志类
- * 保存路径为 storage/log，按天存放
- * fatal,error和warning会记录在.log.wf文件中
- * sql会记录在.log.sql文件中
+ * Log class
+ * The save path is storage/log, store by day
+ * fatal, error and warning will record in .log.wf file
+ * sql records will save in .log.sql file
  */
 class PlumeLogger
 {
-    // 日志信息
+    // logs
     protected $log = [];
-    // 日志id
+    // log id
     protected $logId = '';
-    // 日志目录
+    // log path
     protected $logPath = '';
 
-    public function __construct($logId = '', $logPath = '')
+    public function __construct(string $logId = '', string $logPath = '')
     {
         $this->logId = $logId;
         $this->logPath = $logPath;
@@ -2770,13 +3027,14 @@ class PlumeLogger
     }
 
     /**
-     * 打日志，支持SAE环境
-     * @param string $msg 日志内容
-     * @param array $context 用上下文信息替换记录信息中的占位符
-     * @param string $level 日志等级
-     * @param bool $wf 是否记录到单独的wf日志中
+     * Write log, sae support
+     * @param string $msg log message
+     * @param array $context Replaces the placeholder in the record information
+     *              with context information, which is empty by default
+     * @param string $level Log level
+     * @param bool $wf Whether to record in the separate wf file
      */
-    public function write($msg, array $context = array(), $level = 'DEBUG', $wf = false)
+    public function write(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false)
     {
         if (empty($msg)) {
             return;
@@ -2787,13 +3045,14 @@ class PlumeLogger
         }
 
         if ($context) {
-            // 构建一个花括号包含的键名的替换数组
-            $replace = array();
+            // Builds a replacement array of key names contained in curly braces
+            $replace = [];
             foreach ($context as $key => $val) {
                 $replace['{' . $key . '}'] = $val;
             }
 
-            // 替换记录信息中的占位符，最后返回修改后的记录信息。
+            // Replace the placeholder in the record information and finally
+            // return the modified record information.
             $msg = strtr($msg, $replace);
         }
 
@@ -2801,7 +3060,7 @@ class PlumeLogger
             $this->logId = sprintf('%x', (intval(microtime(true) * 10000) % 864000000) * 10000 + mt_rand(0, 9999));
         }
 
-        $log_message = date('[ Y-m-d H:i:s ]') . '['.$this->logId.']' . "[{$level}]" . $msg . PHP_EOL;
+        $log_message = date('[Y-m-d H:i:s]') . '[' . $this->logId . ']' . "[{$level}]" . $msg . PHP_EOL;
         if (strtoupper($level) == 'SQL') {
             $logPath = $this->logPath ? $this->logPath : LOG_PATH . '/' . date('Ymd') . '.log.sql';
             file_put_contents($logPath, $log_message, FILE_APPEND | LOCK_EX);
@@ -2817,89 +3076,346 @@ class PlumeLogger
     }
 
     /**
-     * 日志保存
+     * Save logs
      * @static
      * @access public
      * @return void
      */
     public function save()
     {
-        if (empty($this->log)) return;
+        if (empty($this->log)) {
+            return;
+        }
 
         $msg = implode('', $this->log);
         $logPath = $this->logPath ? $this->logPath : LOG_PATH . '/' . date('Ymd') . '.log';
         file_put_contents($logPath, $msg, FILE_APPEND | LOCK_EX);
-        // 保存后清空日志缓存
+        // Clear the logs
         $this->log = [];
     }
 
     /**
-     * 打印fatal日志
-     * @param string $msg 日志信息
-     * @param array $context 用上下文信息替换记录信息中的占位符
+     * Fatal log
+     * @param string $msg Log message
+     * @param array $context Replaces the placeholder in the record information
+     *              with context information, which is empty by default
      */
-    public function fatal($msg, array $context = array())
+    public function fatal(string $msg, array $context = [])
     {
         $this->write($msg, $context, 'FATAL', true);
     }
 
     /**
-     * 打印error日志
-     * @param string $msg 日志信息
-     * @param array $context 用上下文信息替换记录信息中的占位符
+     * Error log
+     * @param string $msg Log message
+     * @param array $context Replaces the placeholder in the record information
+     *              with context information, which is empty by default
      */
-    public function error($msg, array $context = array())
+    public function error(string $msg, array $context = [])
     {
         $this->write($msg, $context, 'ERROR', true);
     }
 
     /**
-     * 打印warning日志
-     * @param string $msg 日志信息
-     * @param array $context 用上下文信息替换记录信息中的占位符
+     * Warning log
+     * @param string $msg Log message
+     * @param array $context Replaces the placeholder in the record information
+     *              with context information, which is empty by default
      */
-    public function warn($msg, array $context = array())
+    public function warn(string $msg, array $context = [])
     {
         $this->write($msg, $context, 'WARN', true);
     }
 
     /**
-     * 打印notice日志
-     * @param string $msg 日志信息
-     * @param array $context 用上下文信息替换记录信息中的占位符
+     * Notice log
+     * @param string $msg Log message
+     * @param array $context Replaces the placeholder in the record information
+     *              with context information, which is empty by default
      */
-    public function notice($msg, array $context = array()) 
+    public function notice(string $msg, array $context = [])
     {
         $this->write($msg, $context, 'NOTICE');
     }
 
     /**
-     * 打印info日志
-     * @param string $msg 日志信息
-     * @param array $context 用上下文信息替换记录信息中的占位符
+     * Info log
+     * @param string $msg Log message
+     * @param array $context Replaces the placeholder in the record information
+     *              with context information, which is empty by default
      */
-    public function info($msg, array $context = array())
+    public function info(string $msg, array $context = [])
     {
         $this->write($msg, $context, 'INFO');
     }
 
     /**
-     * 打印debug日志
-     * @param string $msg 日志信息
-     * @param array $context 用上下文信息替换记录信息中的占位符
+     * Debug log
+     * @param string $msg Log message
+     * @param array $context Replaces the placeholder in the record information
+     *              with context information, which is empty by default
      */
-    public function debug($msg, array $context = array())
+    public function debug(string $msg, array $context = [])
     {
         $this->write($msg, $context, 'DEBUG');
     }
 
     /**
-     * 打印sql日志
-     * @param string $msg 日志信息
-     * @param array $context 用上下文信息替换记录信息中的占位符
+     * Sql log
+     * @param string $msg Log message
+     * @param array $context Replaces the placeholder in the record information
+     *              with context information, which is empty by default
      */
-    public function sql($msg, array $context = array())
+    public function sql(string $msg, array $context = [])
     {
         $this->write($msg, $context, 'SQL');
+    }
+}
+/**
+ * The PlumePHP HTTP Server.
+ */
+class PlumeHttpServer
+{
+    public $options = [
+        'host' => '127.0.0.1',
+        'port' => '8080',
+        'path' => '',
+        'path_document' => 'public',
+    ];
+
+    protected $cliOptions = [
+        'help' => [
+            'short' => 'h',
+            'desc' => 'show this help;',
+        ],
+        'host' => [
+            'short' => 'H',
+            'desc' => 'set server host,default is 127.0.0.1',
+            'required' => true,
+        ],
+        'port' => [
+            'short' => 'P',
+            'desc' => 'set server port,default is 8080',
+            'required' => true,
+        ],
+        'inner-server' => [
+            'short' => 'i',
+            'desc' => 'use inner server',
+        ],
+        'docroot' => [
+            'short' => 't',
+            'desc' => 'document root',
+            'required' => true,
+        ],
+        'file' => [
+            'short' => 'f',
+            'desc' => 'index file',
+            'required' => true,
+        ],
+        'dry' => [
+            'desc' => 'dry mode, just show cmd',
+        ],
+        'background' => [
+            'short' => 'b',
+            'desc' => 'run background',
+        ],
+    ];
+
+    public $pid = 0;
+
+    protected $cliOptionsEx = [];
+    protected $args = [];
+    protected $docroot = '';
+
+    protected $host;
+    protected $port;
+    protected $isInited = false;
+
+    protected static $_instances = [];
+    // embed
+    public static function instance($object = null)
+    {
+        if (defined('__SINGLETONEX_REPALACER')) {
+            $callback = __SINGLETONEX_REPALACER;
+            return ($callback)(static::class, $object);
+        }
+
+        if ($object) {
+            self::$_instances[static::class] = $object;
+            return $object;
+        }
+
+        $me = self::$_instances[static::class] ?? null;
+        if (null === $me) {
+            $me = new static();
+            self::$_instances[static::class] = $me;
+        }
+
+        return $me;
+    }
+    public function __construct(){}
+
+    public static function runQuickly(array $options)
+    {
+        return static::instance()->init($options)->run();
+    }
+
+    public function init(array $options, object $context = null)
+    {
+        $this->options = array_replace_recursive($this->options, $options);
+        $this->host = $this->options['host'];
+        $this->port = $this->options['port'];
+        $this->args = $this->parseCaptures($this->cliOptions);
+
+        $this->docroot = rtrim($this->options['path'] ?? '', '/').'/'.$this->options['path_document'];
+
+        $this->host = $this->args['host'] ?? $this->host;
+        $this->port = $this->args['port'] ?? $this->port;
+        $this->docroot = $this->args['docroot'] ?? $this->docroot;
+
+        return $this;
+    }
+
+    /**
+     * Whether inited or not.
+     */
+    public function isInited(): bool
+    {
+        return $this->isInited;
+    }
+
+    /**
+     * Gets the arguments.
+     */
+    protected function getopt($options, array $longopts, &$optind)
+    {
+        return getopt($options, $longopts, $optind); // @codeCoverageIgnore
+    }
+
+    protected function parseCaptures(array $cliOptions)
+    {
+        $shorts_map = [];
+        $shorts = [];
+        $longopts = [];
+        foreach ($cliOptions as $k => $v) {
+            $required = $v['required'] ?? false;
+            $optional = $v['optional'] ?? false;
+            $longopts[] = $k.($required?':':'').($optional?'::':'');
+            if (isset($v['short'])) {
+                $shorts[] = $v['short'].($required?':':'').($optional?'::':'');
+                $shorts_map[$v['short']] = $k;
+            }
+        }
+        $optind = null;
+        $args = $this->getopt(implode('', ($shorts)), $longopts, $optind);
+        $args = $args?:[];
+        
+        $pos_args = array_slice($_SERVER['argv'], $optind);
+        foreach ($shorts_map as $k => $v) {
+            if (isset($args[$k]) && !isset($args[$v])) {
+                $args[$v] = $args[$k];
+            }
+        }
+        $args = array_merge($args, $pos_args);
+        return $args;
+    }
+
+    /**
+     * Runs the HTTP server.
+     */
+    public function run()
+    {
+        $this->showWelcome();
+        if (isset($this->args['help'])) {
+            return $this->showHelp();
+        }
+        return $this->runHTTPServer();
+    }
+
+    /**
+     * Gets the pid of the server process.
+     */
+    public function getPid()
+    {
+        return $this->pid;
+    }
+
+    /**
+     * Close the server.
+     */
+    public function close()
+    {
+        if (!$this->pid) {
+            return false;
+        }
+        posix_kill($this->pid, 9);
+    }
+
+    /**
+     * Shows the welcome message.
+     */
+    protected function showWelcome()
+    {
+        echo "PlumePHP: Wellcome, for more info , use --help \n";
+    }
+
+    /**
+     * Shows the help message.
+     */
+    protected function showHelp()
+    {
+        echo "Usage :\n\n";
+        foreach ($this->cliOptions as $k => $v) {
+            $long = $k;
+            $t = $v['short'] ?? '';
+            $t = $t?'-'.$t:'';
+            if ($v['optional'] ?? false) {
+                $long .= ' ['.$k.']';
+                $t .= ' ['.$k.']';
+            }
+            if ($v['required'] ?? false) {
+                $long .= ' <'.$k.'>';
+                $t .= ' <'.$k.'>';
+            }
+            echo " --{$long}\t{$t}\n\t".$v['desc']."\n";
+        }
+        echo "Current args :\n";
+        var_export($this->args);
+        echo "\n";
+    }
+
+    /**
+     * Runs the HTTP Server.
+     */
+    protected function runHTTPServer()
+    {
+        $PHP = escapeshellcmd(PHP_BINARY);
+        $host = escapeshellarg((string)$this->host);
+        $port = escapeshellarg((string)$this->port);
+        $document_root = escapeshellarg($this->docroot);
+        if (isset($this->args['background'])) {
+            $this->options['background'] = true;
+        }
+
+        if ($this->options['background'] ?? false) {
+            echo "PlumePHP: RunServer by PHP inner http server {$this->host}:{$this->port}\n";
+        }
+
+        $cmd = "$PHP -S $host:$port -t $document_root ";
+        if (isset($this->args['dry'])) {
+            echo $cmd;
+            echo "\n";
+            return;
+        }
+
+        if ($this->options['background'] ?? false) {
+            $cmd .= ' > /dev/null 2>&1 & echo $!; ';
+            $pid = exec($cmd);
+            $this->pid = (int)$pid;
+            return $pid;
+        }
+
+        echo "PlumePHP running at : http://{$this->host}:{$this->port}/ \n"; // @codeCoverageIgnore
+        return system($cmd); // @codeCoverageIgnore
     }
 }
