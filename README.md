@@ -1,11 +1,5 @@
 PlumePHP - 羽量级的单文件php开发框架
 
-# What is PlumePHP
-
-PlumePHP is a fast, simple, extensible, single file framework for PHP.
-PlumePHP enables you to quickly and easily build RESTful web applications.
-========
-
 ### 简介
 
 PlumePHP是一个单入口，单文件PHP框架，适用于简单系统的快速开发，提供了简单的路由方式，抛弃了坑爹的PHP模板，采用原生PHP语法来渲染页面。如果您正在开发一个简单的功能，而又不想使用Yii，CodeIgniter，ThinkPHP等框架，则可以试用一下该框架。
