@@ -8,21 +8,23 @@ if (!isset($_SERVER['HTTP_MOD_REWRITE'])) {
     $_SERVER['HTTP_MOD_REWRITE'] = 'Off';
 }
 
+define('DS', DIRECTORY_SEPARATOR);
+define('PLUME_PHP_PATH', dirname(__DIR__));
+
 // 加载框架文件
-include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+include dirname(__DIR__) . DS . 'library'. DS . 'PlumePHP.php';
 
 $app = PlumePHP::app();
 
 // api首页展示
-$app->route('GET /api', function() {
-    header('Content-Type: text/html;charset=utf-8');
+$app->route('GET /api', function () {
     json_output('success', 0, 'api', true);
     return false;
 });
 
 // 通用的路由逻辑
-$app->route('*', function() use ($app) {
-    $app->run();
+$app->route('*', function () use ($app) {
+    $app->runAction();
     return false;
 });
 

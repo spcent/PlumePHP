@@ -1,8 +1,12 @@
 <?php
-
-/**
- * PlumePHP是一款开源免费、轻量级的PHP框架。具有低耦合、轻量级、基于VBD模型等特点，
- * 加速高性能现代WEB网站及WebApp应用的开发。
+/*
+ * 	This file is part of the your PlumePHP package.
+ *
+ * 	The PHP Application For Code Poem For You.
+ * 	(c) 2015-2035 http://plumephp.com All rights reserved.
+ *
+ * 	For the full copyright and license information, please view the LICENSE
+ * 	file that was distributed with this source code.
  */
 // ------------------------------------------------------------------------
 if (!function_exists('json_format')) {
@@ -58,7 +62,7 @@ if (!function_exists('json_format')) {
             }
             // If this character is the end of an element,
             // output a new line and indent the next line
-            else if ($outOfQuotes && ($char === '}' || $char === ']')) {
+            elseif ($outOfQuotes && ($char === '}' || $char === ']')) {
                 $result .= $newLine;
                 $pos--;
                 for ($j = 0; $j < $pos; $j++) {
@@ -66,7 +70,7 @@ if (!function_exists('json_format')) {
                 }
             }
             // eat all non-essential whitespace in the input as we do our own here and it would only mess up our process
-            else if ($outOfQuotes && false !== strpos(" \t\r\n", $char)) {
+            elseif ($outOfQuotes && false !== strpos(" \t\r\n", $char)) {
                 continue;
             }
             // Add the character to the result string
@@ -77,7 +81,7 @@ if (!function_exists('json_format')) {
             }
             // If the last character was the beginning of an element,
             // output a new line and indent the next line
-            else if ($outOfQuotes && ($char === ',' || $char === '{' || $char === '[')) {
+            elseif ($outOfQuotes && ($char === ',' || $char === '{' || $char === '[')) {
                 $result .= $newLine;
                 if ($char === '{' || $char === '[') {
                     $pos++;
@@ -171,19 +175,23 @@ if (!function_exists('redirect')) {
     {
         //多行URL地址支持
         $url = str_replace(["\n", "\r"], '', $url);
-        if (empty($msg))  $msg = "系统将在{$time}秒之后自动跳转到{$url}！";
+        if (empty($msg)) {
+            $msg = "系统将在{$time}秒之后自动跳转到{$url}！";
+        }
         if (!headers_sent()) {
             // redirect
             if (0 === $time) {
                 header('Location: ' . $url);
             } else {
                 header("refresh:{$time};url={$url}");
-                echo ($msg);
+                echo($msg);
             }
             exit();
         } else {
             $str = "<meta http-equiv='Refresh' content='{$time};URL={$url}'>";
-            if ($time != 0) $str .= $msg;
+            if ($time != 0) {
+                $str .= $msg;
+            }
             exit($str);
         }
     }
@@ -265,7 +273,7 @@ if (!function_exists('generate_nonce_str')) {
         $str = "";
         $length = strlen($chars);
         for ($i = 0; $i < $length; $i++) {
-            $str .= $chars[mt_rand(0,  $length - 1)];
+            $str .= $chars[mt_rand(0, $length - 1)];
         }
         return $str;
     }
@@ -280,13 +288,17 @@ if (!function_exists('get_client_ip')) {
     function get_client_ip(int $type = 0)
     {
         $type = $type ? 1 : 0;
-        static $ip = NULL;
+        static $ip = null;
 
-        if ($ip !== NULL) return $ip[$type];
+        if ($ip !== null) {
+            return $ip[$type];
+        }
         if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
             $arr    =   explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
             $pos    =   array_search('unknown', $arr);
-            if (false !== $pos) unset($arr[$pos]);
+            if (false !== $pos) {
+                unset($arr[$pos]);
+            }
             $ip     =   trim($arr[0]);
         } elseif (isset($_SERVER['HTTP_CLIENT_IP'])) {
             $ip     =   $_SERVER['HTTP_CLIENT_IP'];
@@ -623,20 +635,24 @@ if (!function_exists('dump')) {
      */
     function dump()
     {
-        if (!IS_CLI) echo '<pre style="font-size:12px; color:#0000FF">' . PHP_EOL;
+        if (!IS_CLI) {
+            echo '<pre style="font-size:12px; color:#0000FF">' . PHP_EOL;
+        }
         $vars = func_get_args();
         foreach ($vars as $var) {
             if (is_array($var)) {
                 print_r($var);
-            } else if (is_object($var)) {
+            } elseif (is_object($var)) {
                 echo get_class($var) . " Object";
-            } else if (is_resource($var)) {
+            } elseif (is_resource($var)) {
                 echo (string)$var;
             } else {
                 echo var_dump($var);
             }
         }
-        if (!IS_CLI) echo '</pre>' . PHP_EOL;
+        if (!IS_CLI) {
+            echo '</pre>' . PHP_EOL;
+        }
     }
 }
 // ------------------------------------------------------------------------
