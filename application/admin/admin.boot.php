@@ -1,19 +1,26 @@
-<?php if (!defined('PLUME_PHP_PATH')) exit('No direct script access allowed');
+<?php
+
+PlumePHP::app()->path(PLUME_PHP_PATH.DS.'library'.DS.'core');
 
 /**
  * abstract class for wx
  */
-abstract class web_base_action extends \Plume\Libs\Action {
+abstract class web_base_action extends \Plume\Libs\Action
+{
     /**
      * csrf验证
      * @var bool
      */
     protected $csrfValidate = false;
-    public function init() {return true;}
+    public function init()
+    {
+        return true;
+    }
     /**
      * execute方法
      */
-    public function execute() {
+    public function execute()
+    {
         if ($this->init()) {
             return $this->invoke();
         }
@@ -29,11 +36,13 @@ abstract class web_base_action extends \Plume\Libs\Action {
     abstract public function invoke();
 }
 
-class web_base_cmd {
+class web_base_cmd
+{
     /**
      * 日志记录
      */
-    protected function output($msg, $isEcho = true) {
+    protected function output($msg, $isEcho = true)
+    {
         if ($isEcho) {
             echo $msg, PHP_EOL;
         }

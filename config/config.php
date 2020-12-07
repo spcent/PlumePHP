@@ -1,4 +1,4 @@
-<?php if (!defined('PLUME_PHP_PATH')) exit('No direct script access allowed');
+<?php
 
 if (!function_exists('DB')) {
     /**
@@ -11,7 +11,9 @@ if (!function_exists('DB')) {
         static $_instance = [];
         $conf = [];
         $cfgdb = C('DB_CONF');
-        if (count($cfgdb) < 1) throw new \Exception('db config error');
+        if (count($cfgdb) < 1) {
+            throw new \Exception('db config error');
+        }
         if (!empty($options) || is_string($options)) {
             $key = $options;
         } else {
@@ -37,7 +39,7 @@ if (!function_exists('DB')) {
 }
 
 return [
-    'USE_SESSION' => TRUE,                      // 是否开启session，默认false
+    'USE_SESSION' => true,                      // 是否开启session，默认false
     'TIME_ZONE' => 'Asia/Shanghai',
     //[虚拟目录]	如果应用是部署在虚拟目录下，则指定虚拟目录的名字，否则请保持为空
     'VDNAME' => '',

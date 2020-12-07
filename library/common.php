@@ -104,6 +104,7 @@ if (!function_exists('json_output')) {
         if ($is_format) {
             echo '<pre>' . json_format($res) . '</pre>';
         } else {
+            header('Content-Type: application/json; charset=UTF-8');
             echo json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
     }

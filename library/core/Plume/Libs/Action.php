@@ -36,7 +36,7 @@ abstract class Action
     protected $csrfValidate = true;
 
     protected $jsFiles = [];
-	protected $cssFiles = [];
+    protected $cssFiles = [];
 
     /**
      * Set an user defined parameter
@@ -82,12 +82,14 @@ abstract class Action
         return $default;
     }
 
-    public function addJs($jsFile) {
-		$this->jsFiles[] = $jsFile;
-	}
+    public function addJs($jsFile)
+    {
+        $this->jsFiles[] = $jsFile;
+    }
 
-	public function addCss($cssFile) {
-		$this->cssFiles[] = $cssFile;
+    public function addCss($cssFile)
+    {
+        $this->cssFiles[] = $cssFile;
     }
 
     /**
@@ -96,7 +98,8 @@ abstract class Action
      * @param string $value 值
      * @return self
      */
-    public function assign($name, $value) {
+    public function assign($name, $value)
+    {
         \PlumePHP::view()->set($name, $value);
         return $this;
     }
@@ -108,7 +111,8 @@ abstract class Action
      * @param array $data 模板数据
      * @param string $module 模块名称，默认为false
      */
-    public function render($view, $layout = 'layout', $data = [], $module = false) {
+    public function render($view, $layout = 'layout', $data = [], $module = false)
+    {
         if ($module === false) {
             $module = \PlumePHP::get('plumephp.module');
         }
@@ -130,7 +134,8 @@ abstract class Action
     /**
      * run方法
      */
-    public function run() {
+    public function run()
+    {
         // Avoid infinite loop, a listener instance can be called only one time
         if ($this->called) {
             return false;
@@ -151,10 +156,6 @@ abstract class Action
         $executed = $this->execute();
         $result = $this->afterRun($executed);
 
-        // 记录sql日志
-        $sqlLogs = DB()->log();
-        L($sqlLogs, [], 'SQL');
-
         $this->called = true;
         return $result;
     }
@@ -165,7 +166,8 @@ abstract class Action
      * @param string $msg 消息
      * @param mixed 数据
      */
-    public function json($code, $msg, $data) {
+    public function json($code, $msg, $data)
+    {
         $res = ['code'=>$code, 'msg'=>$msg, 'data'=>$data];
         \PlumePHP::json($res, 200, true, 'utf-8', JSON_UNESCAPED_UNICODE);
     }
@@ -174,7 +176,8 @@ abstract class Action
      * @param array $ret
      * @param string $msg
      */
-    public function correct($ret = [], $msg = 'success') {
+    public function correct($ret = [], $msg = 'success')
+    {
         $this->json(0, $msg, $ret);
     }
 
@@ -182,7 +185,8 @@ abstract class Action
      * @param string $msg
      * @param bool $json 是否强制显示json
      */
-    public function error($msg = "数据异常", $code = 1, $json = false) {
+    public function error($msg = "数据异常", $code = 1, $json = false)
+    {
         if (!$json && !IS_AJAX) {
             $html = <<<EOF
 <!DOCTYPE html>
@@ -350,8 +354,14 @@ EOF;
         return $token === $trueToken;
     }
 
-    protected function beforeRun() { return true; }
-    protected function afterRun($result) { return $result; }
+    protected function beforeRun()
+    {
+        return true;
+    }
+    protected function afterRun($result)
+    {
+        return $result;
+    }
 
     /**
      * Execute the action

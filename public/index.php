@@ -22,6 +22,11 @@ $app->route('GET /api', function () {
     return false;
 });
 
+$app->route('GET /', function () {
+    echo 'Hello World!';
+    return false;
+});
+
 // 通用的路由逻辑
 $app->route('*', function () use ($app) {
     $app->runAction();
