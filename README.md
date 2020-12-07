@@ -10,7 +10,7 @@ PlumePHP是一个单入口，单文件PHP框架，适用于简单系统的快速
 
 ### 特点
 
-* 加载简单，引入只需一个文件
+- 加载简单，引入只需一个文件
 - 日志机制
 - 支持HTTP（网页模式）和cli（脚本模式）两种模式
 - 事件驱动
@@ -25,6 +25,33 @@ PlumePHP是一个单入口，单文件PHP框架，适用于简单系统的快速
 - 其他
 
 ## 入口文件：index.php
+
+```php
+// 加载框架文件
+include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+
+$app = PlumePHP::app();
+
+// api首页展示
+$app->route('GET /api', function() {
+    echo json_encode(['code'=>0, 'data'=>'api', 'msg'=>'success'], JSON_UNESCAPED_UNICODE);
+});
+
+$app->route('GET /', function () {
+    echo 'Hello World!';
+    return false;
+});
+
+// 通用的路由逻辑
+$app->route('*', function() use ($app) {
+   $app->runAction();
+});
+
+// 启动
+$app->start();
+```
+
+or 
 
 ```php
 // 加载框架文件
