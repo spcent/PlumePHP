@@ -1,95 +1,314 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Commands
 
 ```bash
-# Run all tests (requires PHPUnit installed globally or via vendor)
+# Run all tests
 phpunit tests/
 
 # Run a single test file
 phpunit tests/RouterTest.php
 
-# Start the built-in dev server
+# Start dev server
 php -S localhost:8000 -t public/
+
+# Run CLI command
+php public/index.php -m {module} -c {cmd} [options]
 
 # Install dependencies
 composer install
 ```
 
-> PHPUnit is not declared in `composer.json`; install globally (`composer global require phpunit/phpunit`) or add it to `require-dev`. Tests use the legacy `PHPUnit_Framework_TestCase` base class.
+> PHPUnit is not in `composer.json`; install globally: `composer global require phpunit/phpunit`. Tests extend the legacy `PHPUnit_Framework_TestCase`.
+
+---
 
 ## Architecture
 
-### Single-file core
+### Core file
 
-The entire framework lives in **`library/PlumePHP.php`** (~4300 lines, 14 classes). There is no build step — it is included directly.
+All 14 framework classes live in **`library/PlumePHP.php`** (~4300 lines). No build step — included directly.
 
 ```
-PlumePHP          Static facade (all public API calls go through this)
-  └─ PlumeEngine  Application instance (DI container / service locator)
-       ├─ PlumeRouter      URL pattern matching
-       ├─ PlumeRequest     HTTP request wrapper
-       ├─ PlumeResponse    HTTP response + redirect + JSON
-       ├─ PlumeView        Native-PHP template rendering
-       ├─ PlumeEvent       Method invocation with before/after filter chains
-       ├─ PlumeLoader      Class autoloader + registry
-       ├─ PlumeCollection  ArrayAccess/Iterator data container (query, data, cookies, files)
-       ├─ PlumeLogger      File-based logging
-       └─ PlumeCmdService  CLI command runner
+PlumePHP            Static facade; all public API calls forwarded here via __callStatic
+  └─ PlumeEngine    Singleton app instance: DI container + request dispatcher
+       ├─ PlumeRouter       URL pattern matching (declaration order, first match wins)
+       ├─ PlumeRequest      HTTP request wrapper (query, POST, headers, cookies, files)
+       ├─ PlumeResponse     HTTP response builder (headers, status, JSON, redirect, ETag)
+       ├─ PlumeView         Native-PHP template rendering with layouts
+       ├─ PlumeEvent        Before/after filter chains on any method
+       ├─ PlumeLoader       Class autoloader + lazy service registry
+       ├─ PlumeCollection   ArrayAccess/Iterator/Countable superglobal wrapper
+       ├─ PlumeParam        GET+POST+JSON merged param container with auto-sanitize
+       ├─ PlumeLogger       File-based logging split by level/type
+       ├─ PlumeSchema       Base class for JSON-serializable data models
+       ├─ PlumeJsonMapper   JSON-to-typed-object mapper with namespace resolution
+       └─ PlumeCmdService   CLI argv parser + command runner
 ```
 
-`PlumePHP::app()` returns the singleton `PlumeEngine`. All static calls on `PlumePHP` are forwarded to it via `__callStatic`.
+`PlumePHP::app()` returns the `PlumeEngine` singleton.
 
-### Extension mechanisms
+### Defined constants (set at boot)
 
-- **`PlumePHP::map('name', fn)`** — adds or overrides a method on the engine (e.g. override `notFound`, `error`)
-- **`PlumePHP::register('name', 'Class', $params, $callback)`** — lazy-instantiates a class as a named service; `PlumePHP::name()` returns the shared instance, `PlumePHP::name(false)` returns a new one
-- **`PlumePHP::before('method', fn)` / `::after('method', fn)`** — wraps any mapped or extensible method; returning `false` from a before-filter breaks the chain
+| Constant | Value |
+|---|---|
+| `PLUME_VERSION` | `'1.3.1'` |
+| `DS` | `DIRECTORY_SEPARATOR` |
+| `PLUME_PHP_PATH` | Path to `library/` |
+| `APP_PATH` | Path to `application/` |
+| `CONFIG_PATH` | Path to `config/` |
+| `PUBLIC_PATH` | Path to `public/` |
+| `LOG_PATH` | Path to log directory |
+| `IS_CLI` | `true` if running from CLI |
+| `SITE_DOMAIN` | Current origin (web only) |
+| `IS_GET` / `IS_POST` / `IS_AJAX` | Request type booleans (web only) |
 
-### Request lifecycle
+---
 
-1. `public/index.php` includes `library/PlumePHP.php`, gets `PlumePHP::app()`
-2. Routes are registered; the catch-all `*` route calls `$app->runAction()`
-3. `runAction()` resolves `/{module}/{controller}/{action}` → loads `application/{module}/{module}.boot.php`, then `application/{module}/actions/{controller}.action.php`, instantiates the action class, calls `execute()`
-4. `PlumePHP::start()` dispatches the request through the router
+## Extension Mechanisms
 
-### Module / action layout
+```php
+// Add/override a method on the engine
+PlumePHP::map('methodName', function(...$args) { ... });
+
+// Register a lazy-instantiated service
+PlumePHP::register('db', 'MyDB', [$param1], function($db) { /* post-init */ });
+PlumePHP::db();        // shared instance
+PlumePHP::db(false);   // new instance every call
+
+// Before/after filters (returning false from before breaks chain)
+PlumePHP::before('start', function(&$params, &$output) { ... });
+PlumePHP::after('start',  function(&$params, &$output) { ... });
+```
+
+---
+
+## Request Lifecycle
+
+1. `public/index.php` includes `library/PlumePHP.php`, calls `PlumePHP::app()`
+2. Routes are registered; wildcard `*` route calls `$app->runAction()`
+3. `PlumePHP::start()` dispatches through the router (output is buffered)
+4. `runAction()` resolves `/{module}/{controller}/{action}`:
+   - Loads `application/{module}/{module}.boot.php`
+   - Loads `application/{module}/actions/{controller}/{action}.action.php`  
+     _or_ `application/{module}/actions/{controller}.action.php` (flat layout)
+   - Instantiates `{module}_{controller}_action`, calls `execute()` → `run()` → `invoke()`
+5. `PlumePHP::stop($code)` flushes buffered response
+
+---
+
+## Module / Action Layout
 
 ```
 application/
   {module}/
-    {module}.boot.php        # bootstraps module, registers paths, defines base action class
+    {module}.boot.php              # Required: bootstraps module, defines base action class
     actions/
-      {controller}.action.php  # defines {module}_{controller}_action extending base action
+      {controller}.action.php      # Class: {module}_{controller}_action
+    console/
+      {cmd}.cmd.php                # Class: {module}_{cmd}_cmd  (CLI only)
+    views/
+      {template}.tpl.php           # Templates; variables available via extract()
+      layout.tpl.php               # Default layout (wrap $__content__)
 ```
 
-Action classes extend `\Plume\Libs\Action` (in `library/core/Plume/Libs/Action.php`), which provides CSRF validation, `invoke()` dispatch, and request/response helpers.
+### Action class structure
 
-### Helper functions (`library/common.php`)
+```php
+// application/web/actions/home.action.php
+class web_home_action extends web_base_action {
+    // protected $csrfValidate = false;  // disable CSRF for this action
+
+    public function invoke() {
+        $id  = $this->getParam('id', 0);      // GET/POST/cookie
+        $raw = $this->request->query['q'];     // direct access
+
+        // Render view
+        $this->assign('user', $userData);
+        $this->render('home', 'layout');       // '' = no layout
+
+        // Or JSON response
+        $this->correct(['key' => 'value']);    // {code:0, msg:'', data:{...}}
+        $this->error('Not found', 404);        // {code:404, msg:'Not found'}
+    }
+
+    public function beforeRun()  { /* runs before invoke() */ }
+    public function afterRun($r) { /* runs after invoke()  */ }
+}
+```
+
+### Action helper methods (`\Plume\Libs\Action`)
+
+| Method | Purpose |
+|---|---|
+| `getParam($name, $default)` | Fetch from GET/POST/cookie |
+| `setParam($name, $value)` | Set a request param |
+| `assign($name, $value)` | Assign variable to view |
+| `render($view, $layout, $data)` | Render template (auto-adds CSRF token) |
+| `json($code, $msg, $data)` | Emit `{code, msg, data}` JSON envelope |
+| `correct($data, $msg)` | Shorthand: `json(0, $msg, $data)` |
+| `error($msg, $code, $asJson)` | Error page or JSON |
+| `getCookie($key)` | Read cookie |
+| `setCookie($key, $val, $exp, $path, $domain)` | Write cookie |
+| `getCsrfToken()` | Get current CSRF token |
+| `validateCsrfToken()` | Validate token (auto-called on POST/PUT/PATCH) |
+| `addJs($file)` / `addCss($file)` | Register assets for layout |
+
+### CLI command class structure
+
+```php
+// application/web/console/install.cmd.php
+class web_install_cmd {
+    public function run($opts) { /* $opts = parsed argv */ }
+}
+```
+
+```bash
+php public/index.php -m web -c install
+php public/index.php --module web --cmd install --dry
+```
+
+---
+
+## Routing
+
+```php
+PlumePHP::route('/path', $callback);
+PlumePHP::route('GET /search', $callback);
+PlumePHP::route('GET|POST /form', $callback);
+PlumePHP::route('/user/@id', function($id) { ... });          // named param
+PlumePHP::route('/post/@slug:[a-z-]+', function($slug) { }); // with regex
+PlumePHP::route('/blog(/@year(/@month))', function($y, $m) { }); // optional
+PlumePHP::route('/files/*', function($splat) { });            // wildcard
+PlumePHP::route('*', function() { });                          // catch-all
+```
+
+- First match wins; returning `true` from a handler continues to next match
+- Route object passed as last arg when third param is `true`
+- Matching is case-insensitive by default (`$router->case_sensitive = true` to change)
+
+---
+
+## Configuration
+
+`config/config.php` returns a plain array. Environment-specific overrides go in `config/{env}.php` (selected via `PLUME_PHP_ENV`).
+
+```php
+// Get
+C('USE_SESSION')                // top-level key
+C('DB_CONF.master.db_port')    // dot notation, max 3 levels
+C(['key1', 'key2'])             // multiple keys at once
+
+// Set
+C('MY_KEY', 'value');
+
+// Direct
+$cfg = PlumePHP::get('plumephp.base_url');
+PlumePHP::set('plumephp.base_url', 'https://example.com');
+```
+
+**Key config options:**
+
+| Key | Default | Purpose |
+|---|---|---|
+| `USE_SESSION` | `true` | Auto-start session |
+| `TIME_ZONE` | `'Asia/Shanghai'` | Default timezone |
+| `VDNAME` | `''` | Virtual directory prefix |
+| `DB_CONF` | `[...]` | Database connections |
+| `plumephp.handle_errors` | `true` | Convert PHP errors to exceptions |
+| `plumephp.base_url` | auto | Base URL for assets/links |
+
+---
+
+## Logging
+
+Logs written to `storage/log/` (or `PLUME_LOG_PATH`):
+
+| File | Levels |
+|---|---|
+| `YYYYMMDD.log` | DEBUG, INFO, NOTICE |
+| `YYYYMMDD.log.wf` | WARN, ERROR, FATAL (and NOTICE) |
+| `YYYYMMDD.log.sql` | SQL queries |
+
+```php
+L('message', $context, 'INFO');         // helper function
+L('query', [], 'SQL', false);           // SQL log
+
+PlumePHP::log('message', [], 'ERROR', true);   // wf file
+```
+
+Log format: `[YYYY-MM-DD HH:MM:SS][{log_id}][LEVEL]message\tcontext_json`
+
+---
+
+## Helper Functions (`library/common.php`)
 
 | Function | Purpose |
 |---|---|
-| `C($key, $val)` | Get/set config via dot notation (3 levels) |
-| `I($file)` | Conditionally include a file |
-| `L($msg, $level)` | Write to log |
-| `json_output($msg, $code, $data, $status)` | Emit standard JSON envelope |
-| `DB($name)` | Get Medoo database instance by config key |
+| `C($key, $val)` | Config get/set (dot notation, 3 levels) |
+| `I($path, $once)` | Conditional include |
+| `L($msg, $ctx, $level, $wf)` | Write log |
+| `T($e, $offset)` | Format exception trace string |
+| `E($prefix, $e)` | Log error with trace |
+| `DB($opts)` | Get Medoo instance (by key or options array) |
+| `json_output($msg, $code, $data)` | Emit `{code,msg,data}` JSON and exit |
+| `redirect($url, $time, $msg)` | HTTP redirect or meta-refresh |
+| `html_filter($html)` | Strip script/iframe/onclick/style tags |
+| `strcut($str, $len, $ext, $zh_len)` | UTF-8 truncate with suffix |
+| `generate_nonce_str($len)` | Random alphanumeric string |
+| `uuid($prefix)` | MD5-based unique ID |
+| `authcode($str, $op, $key, $exp)` | Discuz-style encrypt/decrypt |
+| `signature($data, $key)` | MD5 param signature |
+| `curl_get_contents($url, $post, ...)` | HTTP via cURL |
+| `get_client_ip($type)` | Real client IP |
+| `is_weixin_browser()` | WeChat browser detection |
+| `money_yuan_to_fen($price)` | Float → integer cents |
+| `money_fen_to_yuan($price)` | Integer cents → float |
+| `export_csv($filename, $data)` | Generate & download CSV |
+| `dump($var, ...)` | Pretty-print variables |
+| `dump_with_exit(...)` | Pretty-print then exit |
+| `human_date($ts, $fmt)` | Relative date ("2 hours ago") |
+| `str_starts_with()` / `str_ends_with()` | PHP 8.0 polyfills |
 
-### Configuration
+---
 
-`config/config.php` returns a plain array loaded by the framework. Access via `C('key')` or `C('db.master.host')`. Environment overrides use `PLUME_PHP_ENV` and `PLUME_LOG_PATH` env vars (see `env.sample`).
+## Database Access
 
-### Routing syntax quick reference
+Uses bundled **Medoo** (`library/core/Plume/Libs/Medoo.php`).
 
+```php
+$db = DB();             // default connection (first in DB_CONF)
+$db = DB('master');     // by config key
+$db = DB(['db_server' => '127.0.0.1', 'db_name' => 'test', ...]);  // override
+
+$rows  = $db->select('users', ['id', 'name'], ['age[>]' => 18]);
+$id    = $db->insert('users', ['name' => 'John', 'age' => 30]);
+$count = $db->update('users', ['age' => 31], ['id' => 1]);
+$db->delete('users', ['id' => 1]);
+$rows  = $db->query('SELECT * FROM users')->fetchAll(\PDO::FETCH_ASSOC);
 ```
-/path/@name           named parameter
-/path/@id:[0-9]+      named param with regex
-/path(/@year(/@month))  optional segments
-/path/*               wildcard (splat)
-GET /path             method-restricted
-GET|POST /path        multi-method
-```
 
-Routes are matched in declaration order; returning `true` from a handler passes to the next match.
+DB config keys: `db_server`, `db_port`, `db_user`, `db_password`, `db_name`, `db_charset`, `db_prefix`
+
+---
+
+## CSRF Protection
+
+Enabled by default on all POST/PUT/PATCH requests.
+
+- Token stored in `plume-csrf-token` cookie; validated against `plume-csrf` HMAC cookie
+- Submit via `$_POST['plume_csrf']` or `X-CSRF-TOKEN` header
+- Disable per-action: `protected $csrfValidate = false;`
+- Templates get `$csrf_token` and `$csrf_field` (hidden input HTML) auto-injected
+
+---
+
+## Bundled Libraries
+
+| File | Purpose |
+|---|---|
+| `library/core/Plume/Libs/Medoo.php` | Database abstraction (MySQL-focused) |
+| `library/core/Plume/Libs/Curl.php` | HTTP client wrapper |
+| `library/core/Plume/Libs/JsonRpcServer.php` | JSON-RPC endpoint handler |
+| `library/core/Plume/Libs/AliPhoneMsg.php` | Aliyun SMS integration |
+| `library/core/Plume/Libs/Action.php` | Base action class |

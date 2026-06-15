@@ -1708,7 +1708,11 @@ class PlumeEngine
         int $option = JSON_UNESCAPED_UNICODE
     ) {
         $json = ($encode) ? json_encode($data, $option) : $data;
-        $callback = $this->request()->query[$param];
+        $callback = $this->request()->query[$param] ?? '';
+        if (!preg_match('/^[\w.]{1,64}$/', $callback)) {
+            $this->response()->status(400)->write('Invalid callback parameter')->send();
+            return;
+        }
         $this->response()
             ->status($code)
             ->header('Content-Type', 'application/javascript; charset='.$charset)

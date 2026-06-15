@@ -67,15 +67,15 @@ abstract class Action
         }
 
         $request = \PlumePHP::request();
-        if ($request->query[$name]) {
+        if (isset($request->query[$name])) {
             return $request->query[$name];
         }
 
-        if ($request->data[$name]) {
+        if (isset($request->data[$name])) {
             return $request->data[$name];
         }
 
-        if ($request->cookies[$name]) {
+        if (isset($request->cookies[$name])) {
             return $request->cookies[$name];
         }
 
@@ -249,16 +249,23 @@ EOF;
             $this->csrfToken = $this->createCsrfCookie($trueToken);
             $trueKey = $this->trueTokenKey;
             $csrfKey = $this->csrfTokenKey;
-            $this->setCookie($trueKey, $this->hashData(serialize([$trueKey, $trueToken]), 'plumephp'));
+            $payload = json_encode([$trueKey, $trueToken]);
+            $this->setCookie($trueKey, $this->hashData($payload, $this->getCsrfKey()));
             $this->setCookie($csrfKey, $this->csrfToken);
         }
         return $this->csrfToken;
     }
 
-    private function hashData($data, $key)
+    private function hashData(string $data, string $key): string
     {
         $hash = hash_hmac('sha256', $data, $key);
         return $hash . $data;
+    }
+
+    private function getCsrfKey(): string
+    {
+        $secret = getenv('APP_SECRET');
+        return $secret ?: 'plumephp-csrf-fallback-key';
     }
 
     /**
@@ -298,14 +305,9 @@ EOF;
      * @param int $len
      * @return string
      */
-    private function generateCsrf($len = 32)
+    private function generateCsrf(int $len = 32): string
     {
-        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        $code = '';
-        for ($i = 0; $i < $len; $i++) {
-            $code .= substr($chars, mt_rand(0, strlen($chars)-1), 1);
-        }
-        return $code;
+        return substr(bin2hex(random_bytes($len)), 0, $len);
     }
 
     /**
@@ -330,10 +332,19 @@ EOF;
             return false;
         }
 
-        $trueToken = $_COOKIE[$trueToken];
-        $test = hash_hmac('sha256', '', '', false);
-        $hashLength = mb_strlen($test, '8bit');
-        $trueToken = unserialize(mb_substr($trueToken, $hashLength, mb_strlen($trueToken, '8bit'), '8bit'))[1];
+        $cookieValue = $_COOKIE[$trueToken];
+        $hashLength = mb_strlen(hash_hmac('sha256', '', ''), '8bit');
+        $storedHash = mb_substr($cookieValue, 0, $hashLength, '8bit');
+        $rawPayload = mb_substr($cookieValue, $hashLength, mb_strlen($cookieValue, '8bit'), '8bit');
+        $expectedHash = hash_hmac('sha256', $rawPayload, $this->getCsrfKey());
+        if (!hash_equals($storedHash, $expectedHash)) {
+            return false;
+        }
+        $decoded = json_decode($rawPayload, true);
+        $trueToken = isset($decoded[1]) ? $decoded[1] : '';
+        if (empty($trueToken)) {
+            return false;
+        }
         $token = isset($_POST[$csrfPost]) ? $_POST[$csrfPost] : (isset($_SERVER[$csrfHeader]) ? $_SERVER[$csrfHeader] : null);
         $token = base64_decode(str_replace('.', '+', $token));
         $n = mb_strlen($token, '8bit');

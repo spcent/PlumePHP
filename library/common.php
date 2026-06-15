@@ -125,8 +125,6 @@ if (!function_exists('curl_get_contents')) {
         curl_setopt($ch, CURLOPT_TIMEOUT, 40);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, $return_transfer);
         curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/534.10 (KHTML, like Gecko) Chrome/8.0.552.28 Safari/534.10");
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_HEADER, false);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
         curl_setopt($ch, CURLOPT_AUTOREFERER, true);
@@ -269,12 +267,11 @@ if (!function_exists('generate_nonce_str')) {
     // 生成随机字符串
     function generate_nonce_str(int $length = 16): string
     {
-        // 密码字符集，可任意添加你需要的字符
         $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         $str = "";
-        $length = strlen($chars);
+        $charLen = strlen($chars);
         for ($i = 0; $i < $length; $i++) {
-            $str .= $chars[mt_rand(0, $length - 1)];
+            $str .= $chars[mt_rand(0, $charLen - 1)];
         }
         return $str;
     }
