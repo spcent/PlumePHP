@@ -30,13 +30,6 @@ class Curl
         curl_setopt($ch, CURLOPT_USERAGENT, '');
         curl_setopt($ch, CURLOPT_REFERER, '');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        if (substr($url, 0, 5) === 'https') {
-            // 信任任何证书
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            // 检查证书中是否设置域名
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        }
-
         $startTime = microtime(true);
         $result = curl_exec($ch);
 
@@ -84,13 +77,6 @@ class Curl
         $headers[] = 'Expect:';
         // disable 100-continue
         curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-        if (substr($url, 0, 5) === 'https') {
-            // 信任任何证书
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            // 检查证书中是否设置域名
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        }
-
         $startTime = microtime(true);
         $result = curl_exec($ch);
         self::$cost = round(microtime(true) - $startTime, 3);
@@ -118,12 +104,6 @@ class Curl
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
         curl_setopt($ch, CURLOPT_POST, 1);
-        if (substr($url, 0, 5) === 'https') {
-            // 信任任何证书
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            // 检查证书中是否设置域名
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        }
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
 

@@ -47,13 +47,13 @@ return [
     'ASSETS_VERSION' => '20180205',
     'DB_CONF' => [
         'master'=>[
-            'db_server'   => '127.0.0.1',               // 数据库主机地址
-            'db_port'     => '3306',                    // 数据库端口，默认为3306
-            'db_user'     => 'root',                    // 数据库用户名
-            'db_password' => 'root',                    // 数据库密码
-            'db_name'     => 'beijing_coins',           // 数据库名
-            'db_charset'  => 'utf8mb4',                 // 数据库编码，默认utf8mb4，为了支持emoji表情
-            'db_prefix'   => 'bj_',                     // 前缀
+            'db_server'   => getenv('DB_HOST')     ?: '127.0.0.1',   // 数据库主机地址
+            'db_port'     => getenv('DB_PORT')     ?: '3306',         // 数据库端口，默认为3306
+            'db_user'     => getenv('DB_USER')     ?: 'root',         // 数据库用户名
+            'db_password' => getenv('DB_PASSWORD') ?: '',             // 数据库密码
+            'db_name'     => getenv('DB_NAME')     ?: 'beijing_coins',// 数据库名
+            'db_charset'  => 'utf8mb4',                               // 数据库编码，默认utf8mb4，为了支持emoji表情
+            'db_prefix'   => getenv('DB_PREFIX')   ?: 'bj_',         // 前缀
         ]
     ],
 ];

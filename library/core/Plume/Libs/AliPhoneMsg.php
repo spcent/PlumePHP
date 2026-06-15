@@ -88,10 +88,6 @@ class AliPhoneMsg {
         curl_setopt($ch, CURLOPT_HTTPHEADER, array(
             "x-sdk-client" => "php/2.0.0"
         ));
-        if(substr($url, 0,5) == 'https') {
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        }
         $rtn = curl_exec($ch);
         if($rtn === false) {
             trigger_error("[CURL_" . curl_errno($ch) . "]: " . curl_error($ch), E_USER_ERROR);
