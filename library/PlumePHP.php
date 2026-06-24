@@ -2235,19 +2235,16 @@ class PlumeEngine
      */
     protected function boot()
     {
-        // Tries to load .env file
+        // Load .env file if it exists, or use defaults for testing/CI environments
         $envFile = PLUME_PHP_PATH.DS.'.env';
-        if (!file_exists($envFile)) {
-            $this->_halt(503, "The {$envFile} file is missing.");
-        }
+        $envVariables = file_exists($envFile) ? PlumeDotEnv::parse($envFile) : [];
 
-        $envVariables = PlumeDotEnv::parse($envFile);
         if (isset($envVariables['PLUME_PHP_ENV'])) {
             $env = $envVariables['PLUME_PHP_ENV'];
         } else {
             $env = getenv('PLUME_PHP_ENV')
                 ? getenv('PLUME_PHP_ENV')
-                : get_cfg_var('plumephp.env');
+                : (get_cfg_var('plumephp.env') ?: 'development');
         }
 
         switch ($env) {
