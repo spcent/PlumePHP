@@ -35,6 +35,28 @@ abstract class Action
      */
     protected $csrfValidate = true;
 
+    /**
+     * Declarative validation rules for request parameters.
+     *
+     * Format:
+     *   protected array $rules = [
+     *       'field'  => 'required',
+     *       'age'    => 'required|int|min:18|max:120',
+     *       'email'  => 'required|email',
+     *       'name'   => 'required|string|minLen:2|maxLen:64',
+     *       'status' => 'int',
+     *   ];
+     *
+     * Supported constraints: required, int, float, string, email,
+     *   min:<n>, max:<n>, minLen:<n>, maxLen:<n>
+     *
+     * Override validate() for custom logic; return an array of field→message
+     * pairs to signal failure, or an empty array on success.
+     *
+     * @var array<string, string>
+     */
+    protected array $rules = [];
+
     protected $jsFiles = [];
     protected $cssFiles = [];
 
@@ -153,11 +175,95 @@ abstract class Action
             return false;
         }
 
+        // Declarative validation
+        if (!empty($this->rules)) {
+            $errors = $this->validate();
+            if (!empty($errors)) {
+                $firstMsg = reset($errors);
+                $this->error((string) $firstMsg, 422, true);
+                return false;
+            }
+        }
+
         $executed = $this->execute();
         $result = $this->afterRun($executed);
 
         $this->called = true;
         return $result;
+    }
+
+    /**
+     * Validate request parameters against $this->rules.
+     *
+     * @return array<string, string> field→error message map; empty means valid
+     */
+    public function validate(): array
+    {
+        $errors = [];
+        foreach ($this->rules as $field => $ruleStr) {
+            $value       = $this->getParam($field);
+            $constraints = array_filter(array_map('trim', explode('|', $ruleStr)));
+
+            foreach ($constraints as $constraint) {
+                [$rule, $arg] = array_pad(explode(':', $constraint, 2), 2, null);
+
+                switch ($rule) {
+                    case 'required':
+                        if ($value === null || $value === '') {
+                            $errors[$field] = "{$field} 不能为空";
+                        }
+                        break;
+
+                    case 'int':
+                        if ($value !== null && $value !== '' && !ctype_digit((string) $value) && !is_int($value)) {
+                            $errors[$field] = "{$field} 必须是整数";
+                        }
+                        break;
+
+                    case 'float':
+                        if ($value !== null && $value !== '' && !is_numeric($value)) {
+                            $errors[$field] = "{$field} 必须是数字";
+                        }
+                        break;
+
+                    case 'email':
+                        if ($value !== null && $value !== '' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                            $errors[$field] = "{$field} 邮箱格式不正确";
+                        }
+                        break;
+
+                    case 'min':
+                        if ($value !== null && $value !== '' && is_numeric($value) && (float) $value < (float) $arg) {
+                            $errors[$field] = "{$field} 不能小于 {$arg}";
+                        }
+                        break;
+
+                    case 'max':
+                        if ($value !== null && $value !== '' && is_numeric($value) && (float) $value > (float) $arg) {
+                            $errors[$field] = "{$field} 不能大于 {$arg}";
+                        }
+                        break;
+
+                    case 'minLen':
+                        if ($value !== null && mb_strlen((string) $value) < (int) $arg) {
+                            $errors[$field] = "{$field} 长度不能少于 {$arg} 个字符";
+                        }
+                        break;
+
+                    case 'maxLen':
+                        if ($value !== null && mb_strlen((string) $value) > (int) $arg) {
+                            $errors[$field] = "{$field} 长度不能超过 {$arg} 个字符";
+                        }
+                        break;
+                }
+
+                // Stop checking this field once an error is found
+                if (isset($errors[$field])) {
+                    break;
+                }
+            }
+        }
+        return $errors;
     }
 
     /**
