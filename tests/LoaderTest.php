@@ -4,18 +4,18 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
 require_once __DIR__.'/classes/User.php';
 require_once __DIR__.'/classes/Factory.php';
 
-class LoaderTest extends PHPUnit_Framework_TestCase
+class LoaderTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeLoader
      */
     private $loader;
-    public function setUp()
+    public function setUp(): void
     {
         $this->loader = new PlumeLoader();
         $this->loader->autoload(true, __DIR__.'/classes');

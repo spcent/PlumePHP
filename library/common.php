@@ -11,20 +11,15 @@
 // ------------------------------------------------------------------------
 if (!function_exists('json_format')) {
     /**
-     * Format a flat JSON string to make it more human-readable
+     * Format a flat JSON string to make it more human-readable.
      *
-     * @param string $json The original JSON string to process
-     *        When the input is not a string it is assumed the input is RAW
-     *        and should be converted to JSON first of all.
+     * @param mixed $json String or value to format; non-strings are json_encode'd first
      * @return string Indented version of the original JSON string
      */
-    function json_format($json)
+    function json_format(mixed $json): string
     {
         if (!is_string($json)) {
-            if (phpversion() && phpversion() >= 5.4) {
-                return json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-            }
-            $json = json_encode($json, JSON_UNESCAPED_UNICODE);
+            return (string) json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         }
         $result      = '';
         $pos         = 0;               // indentation level
@@ -280,33 +275,36 @@ if (!function_exists('generate_nonce_str')) {
 if (!function_exists('get_client_ip')) {
     /**
      * 获取客户端IP地址
-     * @param int $type 返回类型 0 返回IP地址 1 返回IPV4地址数字
-     * @return mixed
+     *
+     * 只有当 REMOTE_ADDR 在 $trusted_proxies 白名单内时，才读取 X-Forwarded-For / HTTP_CLIENT_IP 头，
+     * 避免伪造 IP 攻击。
+     *
+     * @param int    $type             返回类型：0 返回 IP 字符串，1 返回 IPv4 整数
+     * @param array  $trusted_proxies  可信反向代理 IP 列表，为空则只信任 REMOTE_ADDR
+     * @return string|int
      */
-    function get_client_ip(int $type = 0)
+    function get_client_ip(int $type = 0, array $trusted_proxies = []): string|int
     {
-        $type = $type ? 1 : 0;
-        static $ip = null;
+        $type      = $type ? 1 : 0;
+        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
-        if ($ip !== null) {
-            return $ip[$type];
-        }
-        if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            $arr    =   explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-            $pos    =   array_search('unknown', $arr);
-            if (false !== $pos) {
-                unset($arr[$pos]);
+        if (!empty($trusted_proxies) && in_array($remoteAddr, $trusted_proxies, true)) {
+            if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+                $candidates = array_map('trim', explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']));
+                $candidates = array_filter($candidates, fn(string $ip): bool => $ip !== 'unknown' && filter_var($ip, FILTER_VALIDATE_IP) !== false);
+                $ip = reset($candidates) ?: $remoteAddr;
+            } elseif (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+                $ip = $_SERVER['HTTP_CLIENT_IP'];
+            } else {
+                $ip = $remoteAddr;
             }
-            $ip     =   trim($arr[0]);
-        } elseif (isset($_SERVER['HTTP_CLIENT_IP'])) {
-            $ip     =   $_SERVER['HTTP_CLIENT_IP'];
-        } elseif (isset($_SERVER['REMOTE_ADDR'])) {
-            $ip     =   $_SERVER['REMOTE_ADDR'];
+        } else {
+            $ip = $remoteAddr;
         }
-        // IP地址合法验证
-        $long = ip2long($ip);
-        $ip = $long ? [$ip, $long] : ['0.0.0.0', 0];
-        return $ip[$type];
+
+        $long = ip2long((string) $ip);
+        $resolved = $long ? [(string) $ip, $long] : ['0.0.0.0', 0];
+        return $resolved[$type];
     }
 }
 // ------------------------------------------------------------------------
@@ -532,25 +530,6 @@ if (!function_exists('strcut')) {
     }
 }
 // ------------------------------------------------------------------------
-if (!function_exists('str_starts_with')) {
-    function str_starts_with(string $haystack, string $needle): bool
-    {
-        $length = strlen($needle);
-        return (substr($haystack, 0, $length) === $needle);
-    }
-}
-// ------------------------------------------------------------------------
-if (!function_exists('str_ends_with')) {
-    function str_ends_with(string $haystack, string $needle): bool
-    {
-        $length = strlen($needle);
-        if ($length == 0) {
-            return true;
-        }
-        return (substr($haystack, -$length) === $needle);
-    }
-}
-// ------------------------------------------------------------------------
 if (!function_exists('str2hex')) {
     /**
      * 字符串转16进制
@@ -590,19 +569,14 @@ if (!function_exists('human_date')) {
     function human_date(int $dateline, string $dateformat = 'Y-m-d H:i:s'): string
     {
         $second = PLUME_CURRENT_TIME - $dateline;
-        if ($second > 31536000) {
-            return date($dateformat, $dateline);
-        } elseif ($second > 2592000) {
-            return floor($second / 2592000) . '月前';
-        } elseif ($second > 86400) {
-            return floor($second / 86400) . '天前';
-        } elseif ($second > 3600) {
-            return floor($second / 3600) . '小时前';
-        } elseif ($second > 60) {
-            return floor($second / 60) . '分钟前';
-        } else {
-            return $second . '秒前';
-        }
+        return match(true) {
+            $second > 31536000 => date($dateformat, $dateline),
+            $second > 2592000  => floor($second / 2592000) . '月前',
+            $second > 86400    => floor($second / 86400) . '天前',
+            $second > 3600     => floor($second / 3600) . '小时前',
+            $second > 60       => floor($second / 60) . '分钟前',
+            default            => $second . '秒前',
+        };
     }
 }
 // ------------------------------------------------------------------------
