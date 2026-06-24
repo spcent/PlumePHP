@@ -4,16 +4,16 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-class RequestTest extends PHPUnit_Framework_TestCase
+class RequestTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeRequest
      */
     private $request;
 
-    public function setUp()
+    public function setUp(): void
     {
         $_SERVER['REQUEST_URI'] = '/';
         $_SERVER['SCRIPT_NAME'] = '/index.php';

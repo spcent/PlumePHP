@@ -4,16 +4,16 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-class ViewTest extends PHPUnit_Framework_TestCase
+class ViewTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeView
      */
     private $view;
 
-    public function setUp()
+    public function setUp(): void
     {
         $this->view = new PlumeView();
         $this->view->path = __DIR__.'/views';

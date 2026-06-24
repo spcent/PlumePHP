@@ -4,9 +4,9 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-class RedirectTest extends PHPUnit_Framework_TestCase
+class RedirectTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeEngine
@@ -21,7 +21,7 @@ class RedirectTest extends PHPUnit_Framework_TestCase
         return $url;
     }
 
-    public function setUp()
+    public function setUp(): void
     {
         $_SERVER['SCRIPT_NAME'] = '/subdir/index.php';
         $this->app = new PlumeEngine();

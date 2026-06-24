@@ -307,18 +307,18 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @return mixed Value
      */
-    public function offsetGet($offset)
+    public function offsetGet(mixed $offset): mixed
     {
-        return isset($this->data[$offset]) ? $this->data[$offset] : null;
+        return $this->data[$offset] ?? null;
     }
 
     /**
      * Sets an item at the offset.
      *
-     * @param string $offset Offset
-     * @param mixed  $value  Value
+     * @param mixed $offset Offset
+     * @param mixed $value  Value
      */
-    public function offsetSet($offset, $value)
+    public function offsetSet(mixed $offset, mixed $value): void
     {
         if (null === $offset) {
             $this->data[] = $value;
@@ -330,11 +330,11 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
     /**
      * Checks if an item exists at the offset.
      *
-     * @param string $offset Offset
+     * @param mixed $offset Offset
      *
      * @return bool Item status
      */
-    public function offsetExists($offset)
+    public function offsetExists(mixed $offset): bool
     {
         return isset($this->data[$offset]);
     }
@@ -342,9 +342,9 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
     /**
      * Removes an item at the offset.
      *
-     * @param string $offset Offset
+     * @param mixed $offset Offset
      */
-    public function offsetUnset($offset)
+    public function offsetUnset(mixed $offset): void
     {
         unset($this->data[$offset]);
     }
@@ -352,7 +352,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
     /**
      * Resets the collection.
      */
-    public function rewind()
+    public function rewind(): void
     {
         reset($this->data);
     }
@@ -362,7 +362,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @return mixed Value
      */
-    public function current()
+    public function current(): mixed
     {
         return current($this->data);
     }
@@ -372,19 +372,17 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @return mixed Value
      */
-    public function key()
+    public function key(): mixed
     {
         return key($this->data);
     }
 
     /**
      * Gets the next collection value.
-     *
-     * @return mixed Value
      */
-    public function next()
+    public function next(): void
     {
-        return next($this->data);
+        next($this->data);
     }
 
     /**
@@ -444,7 +442,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @return array Collection data which can be serialized by <b>json_encode</b>
      */
-    public function jsonSerialize()
+    public function jsonSerialize(): mixed
     {
         return $this->data;
     }
@@ -452,7 +450,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
     /**
      * Removes all items from the collection.
      */
-    public function clear()
+    public function clear(): void
     {
         $this->data = [];
     }
@@ -523,7 +521,7 @@ class PlumeLoader
      * @param array           $params   Class initialization parameters
      * @param callback        $callback Function to call after object instantiation
      */
-    public function register(string $name, $class, array $params = [], callable $callback = null)
+    public function register(string $name, $class, array $params = [], ?callable $callback = null)
     {
         unset($this->instances[$name]);
         $this->classes[$name] = [$class, $params, $callback];
@@ -709,56 +707,27 @@ class PlumeLoader
  */
 class PlumeRoute
 {
-    /**
-     * @var string URL pattern
-     */
-    public $pattern;
+    /** @var array Route parameters populated during matchUrl() */
+    public array $params = [];
+
+    /** @var string Matching regular expression populated during matchUrl() */
+    public string $regex = '';
+
+    /** @var string URL splat content populated during matchUrl() */
+    public string $splat = '';
 
     /**
-     * @var mixed Callback function
+     * @param string   $pattern  URL pattern
+     * @param mixed    $callback Callback function (callable, not typed as property type)
+     * @param array    $methods  HTTP methods
+     * @param bool     $pass     Pass self in callback parameters
      */
-    public $callback;
-
-    /**
-     * @var array HTTP methods
-     */
-    public $methods = [];
-
-    /**
-     * @var array Route parameters
-     */
-    public $params = [];
-
-    /**
-     * @var string Matching regular expression
-     */
-    public $regex;
-
-    /**
-     * @var string URL splat content
-     */
-    public $splat = '';
-
-    /**
-     * @var bool Pass self in callback parameters
-     */
-    public $pass = false;
-
-    /**
-     * Constructor.
-     *
-     * @param string $pattern  URL pattern
-     * @param mixed  $callback Callback function
-     * @param array  $methods  HTTP methods
-     * @param bool   $pass     Pass self in callback parameters
-     */
-    public function __construct(string $pattern, callable $callback, array $methods, bool $pass)
-    {
-        $this->pattern = $pattern;
-        $this->callback = $callback;
-        $this->methods = $methods;
-        $this->pass = $pass;
-    }
+    public function __construct(
+        public readonly string $pattern,
+        public readonly mixed $callback,
+        public readonly array $methods,
+        public readonly bool $pass
+    ) {}
 
     /**
      * Checks if a URL matches the route pattern. Also parses named parameters in the URL.
@@ -933,11 +902,9 @@ class PlumeRouter
      *
      * @return PlumeRoute
      */
-    public function current()
+    public function current(): PlumeRoute|false
     {
-        return isset($this->routes[$this->index])
-            ? $this->routes[$this->index]
-            : false;
+        return $this->routes[$this->index] ?? false;
     }
 
     /**
@@ -1000,6 +967,11 @@ class PlumeView
     private $template;
 
     /**
+     * Resolved content path (set during render).
+     */
+    private string $content = '';
+
+    /**
      * Constructor.
      *
      * @param string $path Path to templates directory
@@ -1016,9 +988,9 @@ class PlumeView
      *
      * @return mixed Value
      */
-    public function get(string $key)
+    public function get(string $key): mixed
     {
-        return isset($this->vars[$key]) ? $this->vars[$key] : null;
+        return $this->vars[$key] ?? null;
     }
 
     /**
@@ -1073,7 +1045,7 @@ class PlumeView
      *
      * @throws \Exception If template not found
      */
-    public function render(string $file, array $data = [], string $layout = 'layout')
+    public function render(string $file, ?array $data = [], string|false $layout = 'layout'): void
     {
         $this->content = $this->getTemplate($file);
         if (!file_exists($this->content)) {
@@ -1085,7 +1057,7 @@ class PlumeView
         }
 
         extract($this->vars);
-        if ('' === $layout) {
+        if ('' === $layout || false === $layout) {
             include $this->content;
         } else {
             $layoutFile = $this->path.DS.$layout.$this->extension;
@@ -1102,18 +1074,31 @@ class PlumeView
      *
      * @param string $file   Template file
      * @param array  $data   Template data
-     * @param string $layout layout file, default false
+     * @param string $layout Layout file
+     * @param bool   $escape When true (default), htmlspecialchars() all string vars before rendering
      *
      * @return string Output of template
      */
-    public function fetch(string $file, array $data = [], string $layout = ''): string
+    public function fetch(string $file, array $data = [], string $layout = '', bool $escape = true): string
     {
         ob_start();
+
+        if ($escape) {
+            $savedVars  = $this->vars;
+            $escaper    = static fn(mixed $v): mixed =>
+                is_string($v) ? htmlspecialchars($v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') : $v;
+            $this->vars = array_map($escaper, $this->vars);
+            $data       = array_map($escaper, $data);
+        }
 
         $this->render($file, $data, $layout);
         $output = ob_get_clean();
 
-        return $output;
+        if ($escape) {
+            $this->vars = $savedVars;
+        }
+
+        return (string) $output;
     }
 
     /**
@@ -1407,13 +1392,13 @@ class PlumeEngine
      *
      * @return mixed
      */
-    public function get(string $key = null)
+    public function get(?string $key = null): mixed
     {
         if (null === $key) {
             return $this->vars;
         }
 
-        return isset($this->vars[$key]) ? $this->vars[$key] : null;
+        return $this->vars[$key] ?? null;
     }
 
     /**
@@ -1450,7 +1435,7 @@ class PlumeEngine
      *
      * @param string $key Key
      */
-    public function clear(string $key = null)
+    public function clear(?string $key = null): void
     {
         if (null === $key) {
             $this->vars = [];
@@ -1532,7 +1517,7 @@ class PlumeEngine
      *
      * @throws \Exception
      */
-    public function _stop(int $code = null)
+    public function _stop(?int $code = null)
     {
         $response = $this->response();
         if (!$response->sent()) {
@@ -1652,12 +1637,12 @@ class PlumeEngine
      *
      * @throws \Exception
      */
-    public function _render(string $file, array $data = null, string $key = null, string $layout = '')
+    public function _render(string $file, ?array $data = null, ?string $key = null, string $layout = ''): void
     {
         if (null !== $key) {
-            $this->view()->set($key, $this->view()->fetch($file, $data, $layout));
+            $this->view()->set($key, $this->view()->fetch($file, $data ?? [], $layout));
         } else {
-            $this->view()->render($file, $data, false, $layout);
+            $this->view()->render($file, $data ?? [], $layout);
         }
     }
 
@@ -2428,7 +2413,7 @@ class PlumeResponse
      *
      * @return int|object Self reference
      */
-    public function status(int $code = null)
+    public function status(?int $code = null)
     {
         if (null === $code) {
             return $this->status;
@@ -2451,7 +2436,7 @@ class PlumeResponse
      *
      * @return object Self reference
      */
-    public function header($name, string $value = null)
+    public function header($name, ?string $value = null)
     {
         if (is_array($name)) {
             foreach ($name as $k => $v) {
@@ -2680,9 +2665,9 @@ class PlumeEvent
      *
      * @return callback $callback Callback function
      */
-    public function get(string $name)
+    public function get(string $name): mixed
     {
-        return isset($this->events[$name]) ? $this->events[$name] : null;
+        return $this->events[$name] ?? null;
     }
 
     /**
@@ -2703,7 +2688,7 @@ class PlumeEvent
      *
      * @param string $name Event name
      */
-    public function clear(string $name = null)
+    public function clear(?string $name = null): void
     {
         if (null !== $name) {
             unset($this->events[$name], $this->filters[$name]);
@@ -2761,7 +2746,7 @@ class PlumeEvent
             $classname = $callback[0];
             $method = $callback[1];
             if (class_exists($classname)) {
-                $r_method = new ReflectionMethod("${classname}::${method}");
+                $r_method = new ReflectionMethod("{$classname}::{$method}");
                 if (!$r_method->isStatic()) {  //is not a static method
                     $callback[0] = new $callback[0]();
                 } //instantiate object on the fly
@@ -2968,19 +2953,13 @@ class PlumeParam
  */
 class PlumeLogger
 {
-    // logs
-    protected $log = [];
-    // log id
-    protected $logId = '';
-    // log path
-    protected $logPath = '';
+    protected array $log = [];
 
-    public function __construct(string $logId = '', string $logPath = '')
-    {
-        $this->logId = $logId;
-        if ($logPath) {
-            $this->logPath = $logPath;
-        } else {
+    public function __construct(
+        protected string $logId = '',
+        protected string $logPath = ''
+    ) {
+        if (!$this->logPath) {
             $this->logPath = C('PLUME_LOG_PATH') ?: LOG_PATH;
         }
     }
@@ -3026,19 +3005,13 @@ class PlumeLogger
         }
 
         $log_message = date('[Y-m-d H:i:s]').'['.$this->logId.']'."[{$level}]".$msg.PHP_EOL;
-        if ('SQL' === strtoupper($level)) {
-            $logPath = $this->logPath.DS.date('Ymd').'.log.sql';
-            file_put_contents($logPath, $log_message, FILE_APPEND | LOCK_EX);
+        $upperLevel  = strtoupper($level);
 
-            return;
-        }
-
-        if ($wf) {
-            $logPath = $this->logPath.DS.date('Ymd').'.log.wf';
-            file_put_contents($logPath, $log_message, FILE_APPEND | LOCK_EX);
-        } else {
-            $this->log[] = $log_message;
-        }
+        match(true) {
+            $upperLevel === 'SQL' => file_put_contents($this->logPath.DS.date('Ymd').'.log.sql', $log_message, FILE_APPEND | LOCK_EX),
+            $wf                  => file_put_contents($this->logPath.DS.date('Ymd').'.log.wf', $log_message, FILE_APPEND | LOCK_EX),
+            default              => ($this->log[] = $log_message),
+        };
     }
 
     /**
@@ -3157,7 +3130,7 @@ class PlumeSchema implements \JsonSerializable
      */
     protected $filledFields;
 
-    public function __construct(PlumeParam $param = null)
+    public function __construct(?PlumeParam $param = null)
     {
         if (null !== $param) {
             $mapper = new PlumeJsonMapper();
@@ -3178,7 +3151,7 @@ class PlumeSchema implements \JsonSerializable
     /**
      * json serialize.
      */
-    public function jsonSerialize()
+    public function jsonSerialize(): mixed
     {
         $reflectObj = new \ReflectionClass($this);
         $res = [];
@@ -4117,7 +4090,7 @@ class PlumeCmdService
         return static::instance()->init($options)->run();
     }
 
-    public function init(array $options, object $context = null)
+    public function init(array $options, ?object $context = null)
     {
         $this->options = array_replace_recursive($this->options, $options);
         $this->host = $this->options['host'];
@@ -4314,7 +4287,7 @@ class PlumeCmdService
             echo "➤ PlumePHP: RunServer by PHP inner http server {$this->host}:{$this->port}\n";
         }
 
-        $cmd = "${PHP} -S ${host}:${port} -t ${document_root} ";
+        $cmd = "{$PHP} -S {$host}:{$port} -t {$document_root} ";
         if (isset($this->args['dry'])) {
             echo $cmd;
             echo "\n";
