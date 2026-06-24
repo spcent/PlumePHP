@@ -58,7 +58,7 @@ class LoggerTest extends \PHPUnit\Framework\TestCase
         $this->logger->warn('a warning');
 
         $wfFile = $this->logDir . '/' . date('Ymd') . '.log.wf';
-        $this->assertStringContainsString('[WARN]a warning', file_get_contents($wfFile));
+        $this->assertStringContainsString('[WARNING]a warning', file_get_contents($wfFile));
     }
 
     public function testWriteFatalGoesToWfFile(): void

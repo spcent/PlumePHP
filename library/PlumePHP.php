@@ -716,6 +716,12 @@ class PlumeRoute
     /** @var string URL splat content populated during matchUrl() */
     public string $splat = '';
 
+    /** Pre-compiled regex pattern (populated by compile() or setCompiled()). */
+    private string $compiledRegex = '';
+
+    /** Named parameter keys collected during regex compilation. */
+    private array $compiledIds = [];
+
     /**
      * @param string   $pattern  URL pattern
      * @param mixed    $callback Callback function (callable, not typed as property type)
@@ -728,6 +734,43 @@ class PlumeRoute
         public readonly array $methods,
         public readonly bool $pass
     ) {}
+
+    /**
+     * Pre-compiles the route pattern to a regex and stores it.
+     * Returns [regex, namedParamKeys] for caching.
+     */
+    public function compile(): array
+    {
+        if ($this->compiledRegex !== '') {
+            return [$this->compiledRegex, $this->compiledIds];
+        }
+        $ids   = [];
+        $regex = str_replace([')', '/*'], [')?', '(/?|/.*?)'], $this->pattern);
+        $regex = preg_replace_callback(
+            '#@([\w]+)(:([^/\(\)]*))?#',
+            function ($matches) use (&$ids) {
+                $ids[$matches[1]] = null;
+                return isset($matches[3])
+                    ? '(?P<'.$matches[1].'>'.$matches[3].')'
+                    : '(?P<'.$matches[1].'>[^/\?]+)';
+            },
+            $regex
+        );
+        $last_char = substr($this->pattern, -1);
+        $regex    .= ($last_char === '/') ? '?' : '/?';
+        $this->compiledRegex = $regex;
+        $this->compiledIds   = $ids;
+        return [$regex, $ids];
+    }
+
+    /**
+     * Loads a pre-compiled regex from the route cache.
+     */
+    public function setCompiled(string $regex, array $ids): void
+    {
+        $this->compiledRegex = $regex;
+        $this->compiledIds   = $ids;
+    }
 
     /**
      * Checks if a URL matches the route pattern. Also parses named parameters in the URL.
@@ -744,7 +787,6 @@ class PlumeRoute
             return true;
         }
 
-        $ids = [];
         $last_char = substr($this->pattern, -1);
         // Get splat
         if ('*' === $last_char) {
@@ -763,28 +805,8 @@ class PlumeRoute
             $this->splat = (string) substr($url, $i + 1);
         }
 
-        // Build the regex for matching
-        $regex = str_replace([')', '/*'], [')?', '(/?|/.*?)'], $this->pattern);
-        $regex = preg_replace_callback(
-            '#@([\w]+)(:([^/\(\)]*))?#',
-            function ($matches) use (&$ids) {
-                $ids[$matches[1]] = null;
-                if (isset($matches[3])) {
-                    return '(?P<'.$matches[1].'>'.$matches[3].')';
-                }
-
-                return '(?P<'.$matches[1].'>[^/\?]+)';
-            },
-            $regex
-        );
-
-        // Fix trailing slash
-        if ('/' === $last_char) {
-            $regex .= '?';
-        } else {
-            // Allow trailing slash
-            $regex .= '/?';
-        }
+        // Use pre-compiled regex if available (route caching), otherwise compile now
+        [$regex, $ids] = $this->compile();
 
         // Attempt to match route and named parameters
         if (preg_match('#^'.$regex.'(?:\?.*)?$#'.(($case_sensitive) ? '' : 'i'), $url, $matches)) {
@@ -825,6 +847,13 @@ class PlumeRouter
      * @var bool
      */
     public $case_sensitive = false;
+
+    /** Path to the compiled-route cache file; null = caching disabled. */
+    private ?string $cacheFile = null;
+
+    /** Whether we have already loaded (or built) the cache this request. */
+    private bool $cacheLoaded = false;
+
     /**
      * Mapped routes.
      *
@@ -884,8 +913,25 @@ class PlumeRouter
      *
      * @return bool|PlumeRoute Matching route or false if no match
      */
+    /**
+     * Enables compiled regex caching to a PHP file.
+     * Must be called after routes are registered, before start().
+     */
+    public function enableCache(string $cacheFile): void
+    {
+        $this->cacheFile = $cacheFile;
+    }
+
     public function route(PlumeRequest $request)
     {
+        if ($this->cacheFile !== null && !$this->cacheLoaded) {
+            $this->cacheLoaded = true;
+            if (!$this->loadCache()) {
+                $this->precompile();
+                $this->saveCache();
+            }
+        }
+
         while ($route = $this->current()) {
             if (false !== $route && $route->matchMethod($request->method)
                 && $route->matchUrl($request->url, $this->case_sensitive)) {
@@ -895,6 +941,52 @@ class PlumeRouter
         }
 
         return false;
+    }
+
+    /** Pre-compiles regex for every registered route and persists to file. */
+    private function precompile(): void
+    {
+        foreach ($this->routes as $route) {
+            $route->compile();
+        }
+    }
+
+    /** Loads compiled regex from the cache file and applies to registered routes. */
+    private function loadCache(): bool
+    {
+        if (!file_exists($this->cacheFile)) {
+            return false;
+        }
+        $data = include $this->cacheFile;
+        if (!is_array($data)) {
+            return false;
+        }
+        foreach ($this->routes as $route) {
+            $key = $route->pattern;
+            if (isset($data[$key])) {
+                $route->setCompiled($data[$key]['regex'], $data[$key]['ids']);
+            }
+        }
+        return true;
+    }
+
+    /** Writes all compiled regex patterns to the cache file. */
+    private function saveCache(): void
+    {
+        $data = [];
+        foreach ($this->routes as $route) {
+            [$regex, $ids] = $route->compile();
+            $data[$route->pattern] = ['regex' => $regex, 'ids' => $ids];
+        }
+        $cacheDir = dirname($this->cacheFile);
+        if (!is_dir($cacheDir)) {
+            mkdir($cacheDir, 0755, true);
+        }
+        file_put_contents(
+            $this->cacheFile,
+            '<?php return ' . var_export($data, true) . ';' . PHP_EOL,
+            LOCK_EX
+        );
     }
 
     /**
@@ -1160,6 +1252,148 @@ class PlumeView
     }
 }
 /**
+ * Lightweight .env file parser — replaces parse_ini_file().
+ * Supports: # comments, single/double quoted values, inline comments,
+ * and type coercion (true/false/null/numbers).
+ */
+class PlumeDotEnv
+{
+    public static function parse(string $filePath): array
+    {
+        if (!is_readable($filePath)) {
+            return [];
+        }
+        $result = [];
+        foreach (file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            $line = trim($line);
+            if ($line === '' || $line[0] === '#') {
+                continue;
+            }
+            $eqPos = strpos($line, '=');
+            if ($eqPos === false) {
+                continue;
+            }
+            $key   = trim(substr($line, 0, $eqPos));
+            $value = trim(substr($line, $eqPos + 1));
+            if ($key === '') {
+                continue;
+            }
+            $result[$key] = self::parseValue($value);
+        }
+        return $result;
+    }
+
+    private static function parseValue(string $value): mixed
+    {
+        // Double-quoted: parse escape sequences
+        if (strlen($value) >= 2 && $value[0] === '"' && $value[-1] === '"') {
+            return stripcslashes(substr($value, 1, -1));
+        }
+        // Single-quoted: literal value
+        if (strlen($value) >= 2 && $value[0] === "'" && $value[-1] === "'") {
+            return substr($value, 1, -1);
+        }
+        // Strip inline comment (space + #)
+        if (($pos = strpos($value, ' #')) !== false) {
+            $value = trim(substr($value, 0, $pos));
+        }
+        return match(strtolower($value)) {
+            'true', 'yes', 'on'  => true,
+            'false', 'no', 'off' => false,
+            'null', ''           => null,
+            default              => is_numeric($value)
+                ? (str_contains($value, '.') ? (float) $value : (int) $value)
+                : $value,
+        };
+    }
+}
+/**
+ * PSR-11 not-found exception.
+ */
+class PlumeNotFoundException extends \RuntimeException implements \Psr\Container\NotFoundExceptionInterface {}
+/**
+ * PSR-11 container exception.
+ */
+class PlumeContainerException extends \RuntimeException implements \Psr\Container\ContainerExceptionInterface {}
+/**
+ * PSR-11 ContainerInterface wrapping PlumeLoader's service registry.
+ */
+class PlumeContainer implements \Psr\Container\ContainerInterface
+{
+    public function __construct(private readonly PlumeLoader $loader) {}
+
+    public function get(string $id): mixed
+    {
+        if (!$this->has($id)) {
+            throw new PlumeNotFoundException("Service '{$id}' not found in the container.");
+        }
+        return $this->loader->load($id);
+    }
+
+    public function has(string $id): bool
+    {
+        return $this->loader->get($id) !== null;
+    }
+}
+/**
+ * PSR-15-style request handler interface (uses PlumePHP's own Request/Response).
+ */
+interface PlumeRequestHandlerInterface
+{
+    public function handle(PlumeRequest $request): PlumeResponse;
+}
+/**
+ * PSR-15-style middleware interface.
+ */
+interface PlumeMiddlewareInterface
+{
+    public function process(PlumeRequest $request, PlumeRequestHandlerInterface $handler): PlumeResponse;
+}
+/**
+ * Chains PlumeMiddlewareInterface instances around a final PlumeRequestHandlerInterface.
+ */
+class PlumeMiddlewarePipeline implements PlumeRequestHandlerInterface
+{
+    private array $middlewares = [];
+    private ?PlumeRequestHandlerInterface $finalHandler = null;
+
+    public function pipe(PlumeMiddlewareInterface $middleware): static
+    {
+        $this->middlewares[] = $middleware;
+        return $this;
+    }
+
+    public function setFinalHandler(PlumeRequestHandlerInterface $handler): void
+    {
+        $this->finalHandler = $handler;
+    }
+
+    public function handle(PlumeRequest $request): PlumeResponse
+    {
+        $final = $this->finalHandler ?? new class implements PlumeRequestHandlerInterface {
+            public function handle(PlumeRequest $request): PlumeResponse { return new PlumeResponse(); }
+        };
+
+        $handler = array_reduce(
+            array_reverse($this->middlewares),
+            static fn(PlumeRequestHandlerInterface $carry, PlumeMiddlewareInterface $mw): PlumeRequestHandlerInterface =>
+                new class($mw, $carry) implements PlumeRequestHandlerInterface {
+                    public function __construct(
+                        private readonly PlumeMiddlewareInterface $mw,
+                        private readonly PlumeRequestHandlerInterface $next
+                    ) {}
+                    public function handle(PlumeRequest $request): PlumeResponse
+                    {
+                        return $this->mw->process($request, $this->next);
+                    }
+                },
+            $final
+        );
+
+        return $handler->handle($request);
+    }
+}
+/**
  * The plume engine.
  */
 class PlumeEngine
@@ -1184,6 +1418,9 @@ class PlumeEngine
      * @var PlumeEvent
      */
     protected $dispatcher;
+
+    /** @var PlumeMiddlewareInterface[] */
+    protected array $middlewares = [];
 
     /**
      * Constructor.
@@ -1454,6 +1691,32 @@ class PlumeEngine
         $this->loader->addDirectory($dir);
     }
 
+    /**
+     * Registers a PSR-15-style middleware to run before route dispatch.
+     */
+    public function addMiddleware(PlumeMiddlewareInterface $middleware): static
+    {
+        $this->middlewares[] = $middleware;
+        return $this;
+    }
+
+    /**
+     * Returns a PSR-11 container wrapping the service registry.
+     */
+    public function container(): PlumeContainer
+    {
+        return new PlumeContainer($this->loader);
+    }
+
+    /**
+     * Enables compiled route-regex caching to the given file path.
+     * Call after all routes are registered, before start().
+     */
+    public function enableRouteCache(string $path): void
+    {
+        $this->router()->enableCache($path);
+    }
+
     // Extensible Methods
 
     /**
@@ -1463,7 +1726,6 @@ class PlumeEngine
      */
     public function _start()
     {
-        $dispatched = false;
         $self = $this;
 
         // Allow filters to run
@@ -1471,9 +1733,10 @@ class PlumeEngine
             $self->stop();
         });
 
-        $request = $this->request();
+        $request  = $this->request();
         $response = $this->response();
-        $router = $this->router();
+        $router   = $this->router();
+
         // Flush any existing output
         if (ob_get_length() > 0) {
             $response->write(ob_get_clean());
@@ -1482,32 +1745,51 @@ class PlumeEngine
         // Enable output buffering
         ob_start();
 
-        // Route the request
+        if (!empty($this->middlewares)) {
+            $pipeline = new PlumeMiddlewarePipeline();
+            foreach ($this->middlewares as $m) {
+                $pipeline->pipe($m);
+            }
+            $engine = $this;
+            $pipeline->setFinalHandler(new class($engine, $router) implements PlumeRequestHandlerInterface {
+                public function __construct(
+                    private readonly PlumeEngine $engine,
+                    private readonly PlumeRouter $router
+                ) {}
+                public function handle(PlumeRequest $request): PlumeResponse
+                {
+                    return $this->engine->_runRouteLoop($request, $this->router);
+                }
+            });
+            $pipeline->handle($request);
+        } else {
+            $this->_runRouteLoop($request, $router);
+        }
+    }
+
+    /**
+     * Runs the route dispatch loop. Used by _start() and the middleware pipeline.
+     */
+    public function _runRouteLoop(PlumeRequest $request, PlumeRouter $router): PlumeResponse
+    {
+        $dispatched = false;
         while ($route = $router->route($request)) {
             $params = array_values($route->params);
-            // Add route info to the parameter list
             if ($route->pass) {
                 $params[] = $route;
             }
-
-            // Call route handler
-            $continue = $this->dispatcher->execute(
-                $route->callback,
-                $params
-            );
-
+            $continue = $this->dispatcher->execute($route->callback, $params);
             $dispatched = true;
             if (!$continue) {
                 break;
             }
-
             $router->next();
             $dispatched = false;
         }
-
         if (!$dispatched) {
             $this->notFound();
         }
+        return $this->response();
     }
 
     /**
@@ -1959,7 +2241,7 @@ class PlumeEngine
             $this->_halt(503, "The {$envFile} file is missing.");
         }
 
-        $envVariables = parse_ini_file($envFile, false, INI_SCANNER_TYPED);
+        $envVariables = PlumeDotEnv::parse($envFile);
         if (isset($envVariables['PLUME_PHP_ENV'])) {
             $env = $envVariables['PLUME_PHP_ENV'];
         } else {
@@ -2951,7 +3233,7 @@ class PlumeParam
  * fatal, error and warning will record in .log.wf file
  * sql records will save in .log.sql file.
  */
-class PlumeLogger
+class PlumeLogger implements \Psr\Log\LoggerInterface
 {
     protected array $log = [];
 
@@ -2978,14 +3260,11 @@ class PlumeLogger
      * @param string $level   Log level
      * @param bool   $wf      Whether to record in the separate wf file
      */
-    public function write(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false)
+    public function write(\Stringable|string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false): void
     {
-        if (empty($msg)) {
+        $msg = (string) $msg;
+        if ($msg === '') {
             return;
-        }
-
-        if (is_array($msg)) {
-            $msg = implode("\n", $msg);
         }
 
         if ($context) {
@@ -3041,79 +3320,76 @@ class PlumeLogger
      * @param array  $context Replaces the placeholder in the record information
      *                        with context information, which is empty by default
      */
-    public function fatal(string $msg, array $context = [])
+    public function fatal(\Stringable|string $msg, array $context = []): void
     {
         $this->write($msg, $context, 'FATAL', true);
     }
 
-    /**
-     * Error log.
-     *
-     * @param string $msg     Log message
-     * @param array  $context Replaces the placeholder in the record information
-     *                        with context information, which is empty by default
-     */
-    public function error(string $msg, array $context = [])
+    public function emergency(\Stringable|string $message, array $context = []): void
     {
-        $this->write($msg, $context, 'ERROR', true);
+        $this->write($message, $context, 'EMERGENCY', true);
+    }
+
+    public function alert(\Stringable|string $message, array $context = []): void
+    {
+        $this->write($message, $context, 'ALERT', true);
+    }
+
+    public function critical(\Stringable|string $message, array $context = []): void
+    {
+        $this->write($message, $context, 'CRITICAL', true);
+    }
+
+    public function error(\Stringable|string $message, array $context = []): void
+    {
+        $this->write($message, $context, 'ERROR', true);
+    }
+
+    public function warning(\Stringable|string $message, array $context = []): void
+    {
+        $this->write($message, $context, 'WARNING', true);
+    }
+
+    /** Alias for warning() for backwards compatibility. */
+    public function warn(\Stringable|string $msg, array $context = []): void
+    {
+        $this->warning($msg, $context);
+    }
+
+    public function notice(\Stringable|string $message, array $context = []): void
+    {
+        $this->write($message, $context, 'NOTICE');
+    }
+
+    public function info(\Stringable|string $message, array $context = []): void
+    {
+        $this->write($message, $context, 'INFO');
+    }
+
+    public function debug(\Stringable|string $message, array $context = []): void
+    {
+        $this->write($message, $context, 'DEBUG');
     }
 
     /**
-     * Warning log.
-     *
-     * @param string $msg     Log message
-     * @param array  $context Replaces the placeholder in the record information
-     *                        with context information, which is empty by default
+     * PSR-3 log() — dispatches to the appropriate severity method.
      */
-    public function warn(string $msg, array $context = [])
+    public function log(mixed $level, \Stringable|string $message, array $context = []): void
     {
-        $this->write($msg, $context, 'WARN', true);
+        $levelStr = is_string($level) ? strtolower($level) : (string) $level;
+        match($levelStr) {
+            'emergency' => $this->emergency($message, $context),
+            'alert'     => $this->alert($message, $context),
+            'critical'  => $this->critical($message, $context),
+            'error'     => $this->error($message, $context),
+            'warning'   => $this->warning($message, $context),
+            'notice'    => $this->notice($message, $context),
+            'info'      => $this->info($message, $context),
+            default     => $this->debug($message, $context),
+        };
     }
 
-    /**
-     * Notice log.
-     *
-     * @param string $msg     Log message
-     * @param array  $context Replaces the placeholder in the record information
-     *                        with context information, which is empty by default
-     */
-    public function notice(string $msg, array $context = [])
-    {
-        $this->write($msg, $context, 'NOTICE');
-    }
-
-    /**
-     * Info log.
-     *
-     * @param string $msg     Log message
-     * @param array  $context Replaces the placeholder in the record information
-     *                        with context information, which is empty by default
-     */
-    public function info(string $msg, array $context = [])
-    {
-        $this->write($msg, $context, 'INFO');
-    }
-
-    /**
-     * Debug log.
-     *
-     * @param string $msg     Log message
-     * @param array  $context Replaces the placeholder in the record information
-     *                        with context information, which is empty by default
-     */
-    public function debug(string $msg, array $context = [])
-    {
-        $this->write($msg, $context, 'DEBUG');
-    }
-
-    /**
-     * Sql log.
-     *
-     * @param string $msg     Log message
-     * @param array  $context Replaces the placeholder in the record information
-     *                        with context information, which is empty by default
-     */
-    public function sql(string $msg, array $context = [])
+    public function sql(\Stringable|string $msg, array $context = []): void
     {
         $this->write($msg, $context, 'SQL');
     }
