@@ -227,14 +227,8 @@ class PlumeHelper
         return $resolved[$type];
     }
 
-    public static function signature(array $datas, string $key = 'afjd32t4-#of=2a;2fd#c@ff'): string
+    public static function signature(array $datas, string $key): string
     {
-        if ($key === 'afjd32t4-#of=2a;2fd#c@ff') {
-            trigger_error(
-                'PlumeHelper::signature() called with the default insecure key — pass your own secret key.',
-                E_USER_WARNING
-            );
-        }
         ksort($datas);
         $tmp = [];
         foreach ($datas as $k => $v) {

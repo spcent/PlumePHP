@@ -60,11 +60,10 @@ class PlumeHelperTest extends \PHPUnit\Framework\TestCase
         $this->assertSame($sig1, $sig2);
     }
 
-    public function testSignatureDefaultKeyEmitsWarning(): void
+    public function testSignatureRequiresKey(): void
     {
-        $this->expectWarning();
-        $this->expectWarningMessageMatches('/insecure key/');
-        PlumeHelper::signature(['a' => '1']);
+        $this->expectException(\TypeError::class);
+        PlumeHelper::signature(['a' => '1']); // key is now required, no default
     }
 
     public function testAuthcodeRoundTrip(): void

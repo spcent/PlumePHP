@@ -88,7 +88,7 @@ if (!function_exists('get_client_ip')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('signature')) {
-    function signature(array $datas, string $key = 'afjd32t4-#of=2a;2fd#c@ff'): string
+    function signature(array $datas, string $key): string
     {
         return PlumeHelper::signature($datas, $key);
     }
