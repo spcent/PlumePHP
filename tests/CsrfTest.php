@@ -67,6 +67,10 @@ class CsrfTest extends \PHPUnit\Framework\TestCase
         $this->assertFalse($this->action->publicValidateCsrfToken());
     }
 
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
     public function testCreateCsrfTokenReturnsMaskedString(): void
     {
         $_SERVER['REQUEST_METHOD'] = 'GET';
@@ -75,6 +79,10 @@ class CsrfTest extends \PHPUnit\Framework\TestCase
         $this->assertIsString($token);
     }
 
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
     public function testCsrfTokenReturnsCookieValueWhenCookieIsSet(): void
     {
         // Simulate a request where the token cookie already exists.

@@ -157,21 +157,20 @@ class PlumeRequest
     /**
      * Gets the body of the request.
      *
+     * php://input is buffered and safe to read multiple times in PHP 7.1+.
+     * We intentionally avoid a static cache here so persistent worker
+     * processes (FrankenPHP, RoadRunner) do not carry a previous request's
+     * body into the next request.
+     *
      * @return string Raw HTTP request body
      */
     public static function getBody(): string
     {
-        static $body;
-        if (null !== $body) {
-            return $body;
-        }
-
         $method = self::getMethod();
         if ('POST' === $method || 'PUT' === $method || 'PATCH' === $method) {
-            $body = file_get_contents('php://input') ?? '';
+            return file_get_contents('php://input') ?? '';
         }
-
-        return $body ?? '';
+        return '';
     }
 
     /**

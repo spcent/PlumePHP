@@ -301,10 +301,18 @@ class PlumeCmdService
      */
     protected function runHTTPServer()
     {
-        $PHP = escapeshellcmd(PHP_BINARY);
-        $host = escapeshellarg((string) $this->host);
-        $port = escapeshellarg((string) $this->port);
+        // Check for port conflict before attempting to bind.
+        $sock = @fsockopen($this->host, (int) $this->port, $errno, $errstr, 1);
+        if ($sock !== false) {
+            fclose($sock);
+            return $this->error("Port {$this->port} is already in use on {$this->host}");
+        }
+
+        $PHP           = escapeshellcmd(PHP_BINARY);
+        $address       = escapeshellarg("{$this->host}:{$this->port}");
         $document_root = escapeshellarg($this->docroot);
+        $router_script = escapeshellarg($this->docroot . DS . 'index.php');
+
         if (isset($this->args['background'])) {
             $this->options['background'] = true;
         }
@@ -313,7 +321,9 @@ class PlumeCmdService
             echo "➤ PlumePHP: RunServer by PHP inner http server {$this->host}:{$this->port}\n";
         }
 
-        $cmd = "{$PHP} -S {$host}:{$port} -t {$document_root} ";
+        // The router script must be passed so all requests (including dynamic
+        // routes) are dispatched through public/index.php instead of 404ing.
+        $cmd = "{$PHP} -S {$address} -t {$document_root} {$router_script}";
         if (isset($this->args['dry'])) {
             echo $cmd;
             echo "\n";
