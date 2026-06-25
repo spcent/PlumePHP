@@ -31,6 +31,6 @@
     "ext-pdo": "数据库驱动"
   },
   "require-dev": {
-    "phpunit/phpunit": "^9.0|^10.0|^11.0"
+    "phpunit/phpunit": "^9"
   }
 }
