@@ -257,11 +257,6 @@ class PlumeHelper
      */
     public static function authcode(string $string, string $operation = 'DECODE', string $key = '', int $expiry = 0): string
     {
-        trigger_error(
-            'PlumeHelper::authcode() is deprecated and uses MD5/RC4 — not cryptographically safe. '
-            . 'Use sodium_crypto_secretbox() or openssl_encrypt() instead.',
-            E_USER_DEPRECATED
-        );
         $ckeyLength = 4;
         $key        = md5($key ?: 'plumephp');
         $keya       = md5(substr($key, 0, 16));
