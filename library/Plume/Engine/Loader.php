@@ -124,28 +124,7 @@ class PlumeLoader
             return call_user_func_array($class, $params);
         }
 
-        switch (count($params)) {
-        case 0:
-            return new $class();
-        case 1:
-            return new $class($params[0]);
-        case 2:
-            return new $class($params[0], $params[1]);
-        case 3:
-            return new $class($params[0], $params[1], $params[2]);
-        case 4:
-            return new $class($params[0], $params[1], $params[2], $params[3]);
-        case 5:
-            return new $class($params[0], $params[1], $params[2], $params[3], $params[4]);
-        default:
-            try {
-                $refClass = new \ReflectionClass($class);
-
-                return $refClass->newInstanceArgs($params);
-            } catch (\ReflectionException $e) {
-                throw new \Exception("Cannot instantiate {$class}", 0, $e);
-            }
-        }
+        return new $class(...$params);
     }
 
     /**

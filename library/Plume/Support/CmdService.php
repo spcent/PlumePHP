@@ -139,25 +139,27 @@ class PlumeCmdService
     /**
      * Runs the HTTP server.
      */
-    public function run()
+    public function run(): int
     {
         if (isset($this->args['version'])) {
             echo '➤ PlumePHP version: ', PLUME_VERSION, PHP_EOL;
-
-            return;
+            return 0;
         }
 
         $this->showWelcome();
         if (isset($this->args['help'])) {
-            return $this->showHelp();
+            $this->showHelp();
+            return 0;
         }
 
         if (isset($this->args['http'])) {
-            return $this->runHTTPServer();
+            $this->runHTTPServer();
+            return 0;
         }
 
         if (empty($this->args['module'])) {
-            return $this->showHelp();
+            $this->showHelp();
+            return 0;
         }
 
         $module = $this->args['module'];
@@ -173,7 +175,7 @@ class PlumeCmdService
         $filename = $file.'.cmd.php';
         $filename = APP_PATH.DS.$module.DS.'console'.DS.$filename;
         if (!file_exists($filename)) {
-            return $this->error('!!! 404 !!! file '.$filename.' not exist');
+            return $this->error('Command file not found: '.$filename);
         }
 
         $className = $module.'_'.str_replace(['\\', '/'], '_', $file).'_cmd';
@@ -184,15 +186,16 @@ class PlumeCmdService
         L('[cli]class name: '.$className.', args: '.json_encode($this->args));
 
         if (!class_exists($className)) {
-            return $this->error('!!! 404 !!! class not exist: '.$className);
+            return $this->error('Command class not found: '.$className);
         }
 
         $actionInstance = new $className();
         if (!method_exists($actionInstance, 'run')) {
-            return $this->error('!!! 404 !!! no run method: '.$className);
+            return $this->error('Command class missing run() method: '.$className);
         }
 
-        return $actionInstance->run();
+        $result = $actionInstance->run($this->args);
+        return is_int($result) ? $result : 0;
     }
 
     /**
@@ -214,9 +217,10 @@ class PlumeCmdService
         posix_kill($this->pid, 9);
     }
 
-    protected function error(string $msg)
+    protected function error(string $msg): int
     {
-        echo '➤ ', $msg, PHP_EOL;
+        fwrite(STDERR, '➤ ERROR: ' . $msg . PHP_EOL);
+        return 1;
     }
 
     /**

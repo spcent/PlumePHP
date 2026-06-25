@@ -110,6 +110,12 @@ class PlumeView
     }
 
     /**
+     * Directory where compiled templates are cached.
+     * Set to a writable path to enable compilation caching; leave empty to disable.
+     */
+    public string $cachePath = '';
+
+    /**
      * Renders a template.
      *
      * @param string $file   Template file
@@ -129,17 +135,87 @@ class PlumeView
             $this->vars = array_merge($this->vars, $data);
         }
 
+        $includeFile = $this->cachePath
+            ? $this->getCompiledTemplate($this->content)
+            : $this->content;
+
         extract($this->vars);
         if ('' === $layout || false === $layout) {
-            include $this->content;
+            include $includeFile;
         } else {
             $layoutFile = $this->path.DS.$layout.$this->extension;
             if (!file_exists($layoutFile)) {
                 throw new \Exception("Layout file not found: {$layoutFile}.");
             }
 
-            include $layoutFile;
+            $layoutInclude = $this->cachePath
+                ? $this->getCompiledTemplate($layoutFile)
+                : $layoutFile;
+            include $layoutInclude;
         }
+    }
+
+    /**
+     * Returns the path to a compiled (cached) version of the template.
+     * Recompiles when the source is newer than the cached file.
+     * Compilation converts lightweight syntax sugar to PHP:
+     *   {$var}        → <?= htmlspecialchars($var, ENT_QUOTES, 'UTF-8') ?>
+     *   {$var|raw}    → <?= $var ?>
+     *   {# comment #} → (removed)
+     *
+     * @param string $sourcePath Absolute path to the source template
+     *
+     * @return string Path to the compiled file (falls back to source on failure)
+     */
+    protected function getCompiledTemplate(string $sourcePath): string
+    {
+        $cacheDir = rtrim($this->cachePath, '/\\');
+        if (!is_dir($cacheDir) && !@mkdir($cacheDir, 0755, true)) {
+            return $sourcePath;
+        }
+
+        $cacheFile = $cacheDir . DS . md5($sourcePath) . '.php';
+
+        if (file_exists($cacheFile) && filemtime($cacheFile) >= filemtime($sourcePath)) {
+            return $cacheFile;
+        }
+
+        $source = file_get_contents($sourcePath);
+        if ($source === false) {
+            return $sourcePath;
+        }
+
+        $compiled = $this->compileTemplate($source);
+        if (@file_put_contents($cacheFile, $compiled, LOCK_EX) === false) {
+            return $sourcePath;
+        }
+
+        return $cacheFile;
+    }
+
+    /**
+     * Compiles template syntax sugar to plain PHP.
+     */
+    protected function compileTemplate(string $source): string
+    {
+        // Strip {# comment #} blocks
+        $source = preg_replace('/\{#.*?#\}/s', '', $source);
+
+        // {$var|raw} compiles to unescaped echo tag
+        $source = preg_replace(
+            '/\{\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*(?:\[[^\]]+\])*)\|raw\}/',
+            '<?= $$1 ?>',
+            $source
+        );
+
+        // {$var} compiles to escaped echo tag
+        $source = preg_replace(
+            '/\{\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*(?:\[[^\]]+\])*)\}/',
+            "<?= htmlspecialchars((string)\$$1, ENT_QUOTES, 'UTF-8') ?>",
+            $source
+        );
+
+        return $source;
     }
 
     /**

@@ -12,14 +12,66 @@ class PlumeNotFoundException extends \RuntimeException implements \Psr\Container
 class PlumeContainerException extends \RuntimeException implements \Psr\Container\ContainerExceptionInterface {}
 /**
  * PSR-11 ContainerInterface wrapping PlumeLoader's service registry.
+ * Supports interface-to-concrete binding, factory closures, and circular dependency detection.
  */
 class PlumeContainer implements \Psr\Container\ContainerInterface
 {
+    /** @var array<string, string> abstract id → concrete class name */
+    private array $bindings = [];
+
+    /** @var array<string, callable> id → factory(ContainerInterface): mixed */
+    private array $factories = [];
+
+    /** @var array<string, bool> ids currently being resolved (circular dependency guard) */
+    private array $resolving = [];
+
     public function __construct(private readonly PlumeLoader $loader) {}
+
+    /**
+     * Bind an interface or abstract name to a concrete class.
+     * The concrete class is resolved through PlumeLoader on first access.
+     */
+    public function bind(string $abstract, string $concrete): void
+    {
+        $this->bindings[$abstract] = $concrete;
+    }
+
+    /**
+     * Register a factory closure for an id.
+     * The closure receives this container and must return the service instance.
+     */
+    public function bindFactory(string $id, callable $factory): void
+    {
+        $this->factories[$id] = $factory;
+    }
 
     public function get(string $id): mixed
     {
-        if (!$this->has($id)) {
+        if (isset($this->resolving[$id])) {
+            throw new PlumeContainerException("Circular dependency detected while resolving '{$id}'.");
+        }
+
+        if (isset($this->factories[$id])) {
+            $this->resolving[$id] = true;
+            try {
+                return ($this->factories[$id])($this);
+            } finally {
+                unset($this->resolving[$id]);
+            }
+        }
+
+        if (isset($this->bindings[$id])) {
+            $concrete = $this->bindings[$id];
+            $this->resolving[$id] = true;
+            try {
+                $instance = $this->loader->load($concrete);
+                return $instance ?? new $concrete();
+            } finally {
+                unset($this->resolving[$id]);
+            }
+        }
+
+        if (!$this->loader->get($id)) {
             throw new PlumeNotFoundException("Service '{$id}' not found in the container.");
         }
         return $this->loader->load($id);
@@ -27,7 +79,9 @@ class PlumeContainer implements \Psr\Container\ContainerInterface
 
     public function has(string $id): bool
     {
-        return $this->loader->get($id) !== null;
+        return isset($this->bindings[$id])
+            || isset($this->factories[$id])
+            || $this->loader->get($id) !== null;
     }
 }
 /**

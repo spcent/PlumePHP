@@ -292,6 +292,88 @@ class PlumeResponse
 
         $this->sent = true;
     }
+
+    /**
+     * Send a file as a download attachment, streaming it in chunks.
+     *
+     * @param string $filePath Absolute path to the file
+     * @param string $name     Download filename shown to the browser (defaults to basename)
+     * @param string $mime     MIME type (auto-detected when empty)
+     *
+     * @throws \Exception If file does not exist
+     */
+    public function download(string $filePath, string $name = '', string $mime = ''): void
+    {
+        if (!file_exists($filePath)) {
+            throw new \Exception("File not found: {$filePath}");
+        }
+
+        $name = $name ?: basename($filePath);
+        $size = filesize($filePath);
+        $mime = $mime ?: (mime_content_type($filePath) ?: 'application/octet-stream');
+
+        $this->status(200)
+             ->header('Content-Type', $mime)
+             ->header('Content-Disposition', 'attachment; filename="' . str_replace('"', '\\"', $name) . '"')
+             ->header('Content-Length', (string) $size)
+             ->header('Cache-Control', 'no-store, no-cache, must-revalidate')
+             ->header('Pragma', 'no-cache');
+
+        if (ob_get_length() > 0) {
+            ob_end_clean();
+        }
+
+        $this->sendHeaders();
+
+        $fp = fopen($filePath, 'rb');
+        if ($fp === false) {
+            throw new \Exception("Cannot open file: {$filePath}");
+        }
+        while (!feof($fp)) {
+            echo fread($fp, 8192);
+            flush();
+        }
+        fclose($fp);
+
+        $this->sent = true;
+    }
+
+    /**
+     * Send a Server-Sent Events (SSE) stream.
+     * The generator callable receives a $emit function:
+     *   $emit(string $data, string $event = 'message', ?string $id = null)
+     * Call $emit as many times as needed; return from $generator to close the stream.
+     *
+     * @param callable $generator function(callable $emit): void
+     */
+    public function stream(callable $generator): void
+    {
+        $this->status(200)
+             ->header('Content-Type', 'text/event-stream; charset=UTF-8')
+             ->header('Cache-Control', 'no-cache')
+             ->header('X-Accel-Buffering', 'no')
+             ->header('Connection', 'keep-alive');
+
+        $this->sendHeaders();
+
+        $emit = static function (string $data, string $event = 'message', ?string $id = null) {
+            if ($id !== null) {
+                echo "id: {$id}\n";
+            }
+            if ($event !== 'message') {
+                echo "event: {$event}\n";
+            }
+            foreach (explode("\n", $data) as $line) {
+                echo "data: {$line}\n";
+            }
+            echo "\n";
+            flush();
+        };
+
+        $generator($emit);
+
+        $this->sent = true;
+    }
 }
 /**
  * Event.
