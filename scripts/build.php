@@ -126,6 +126,18 @@ foreach ($relPaths as $rel) {
     $out .= "\n";
 }
 
+// Inline common.php (included at runtime via I() in Engine::boot, not via require_once).
+// Must appear after PlumeHelper.php since it depends on that class.
+$commonPath = $libDir . '/common.php';
+if (file_exists($commonPath)) {
+    $body = stripHeader((string) file_get_contents($commonPath));
+    $out .= "// ── common.php ──\n";
+    $out .= $body;
+    $out .= "\n";
+} else {
+    fwrite(STDERR, "WARNING: {$commonPath} not found — common.php helpers will be missing from dist\n");
+}
+
 // Append master file: strip header + remove all require_once lines
 $masterBody = stripHeader($masterSrc);
 $masterBody = preg_replace(

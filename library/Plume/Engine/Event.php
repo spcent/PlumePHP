@@ -147,10 +147,10 @@ class PlumeEvent
             $classname = $callback[0];
             $method = $callback[1];
             if (class_exists($classname)) {
-                $r_method = new ReflectionMethod("{$classname}::{$method}");
-                if (!$r_method->isStatic()) {  //is not a static method
+                $r_method = new ReflectionMethod($classname, $method);
+                if (!$r_method->isStatic()) {
                     $callback[0] = new $callback[0]();
-                } //instantiate object on the fly
+                }
             } else {
                 throw new \Exception('The class '.$callback[0].' does not exists!');
             }

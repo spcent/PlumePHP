@@ -39,6 +39,12 @@ class PlumeHelperTest extends \PHPUnit\Framework\TestCase
         $this->assertSame(16, strlen(PlumeHelper::generateNonceStr()));
     }
 
+    public function testGenerateNonceStrProducesDifferentValues(): void
+    {
+        // Basic randomness sanity check — two 16-char strings colliding is ~1 in 62^16.
+        $this->assertNotSame(PlumeHelper::generateNonceStr(16), PlumeHelper::generateNonceStr(16));
+    }
+
     public function testSignatureIsConsistent(): void
     {
         $data = ['b' => '2', 'a' => '1'];
@@ -52,6 +58,13 @@ class PlumeHelperTest extends \PHPUnit\Framework\TestCase
         $sig1 = PlumeHelper::signature(['a' => '1'], 'key');
         $sig2 = PlumeHelper::signature(['a' => '1', 'signature' => 'anything'], 'key');
         $this->assertSame($sig1, $sig2);
+    }
+
+    public function testSignatureDefaultKeyEmitsWarning(): void
+    {
+        $this->expectWarning();
+        $this->expectWarningMessageMatches('/insecure key/');
+        PlumeHelper::signature(['a' => '1']);
     }
 
     public function testAuthcodeRoundTrip(): void
@@ -198,5 +211,31 @@ class PlumeHelperTest extends \PHPUnit\Framework\TestCase
     {
         $arr = ['x' => 1];
         $this->assertSame($arr, PlumeHelper::fetchFromArray($arr, null));
+    }
+
+    // -----------------------------------------------------------------------
+    // HTTP helpers
+    // -----------------------------------------------------------------------
+
+    public function testIsFromBrowserReturnsFalseWithNoUserAgent(): void
+    {
+        unset($_SERVER['HTTP_USER_AGENT']);
+        $this->assertFalse(PlumeHelper::isFromBrowser());
+    }
+
+    public function testIsFromBrowserReturnsTrueForGeckoUA(): void
+    {
+        $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (X11; Linux x86_64; rv:120.0) Gecko/20100101 Firefox/120.0';
+        $this->assertTrue(PlumeHelper::isFromBrowser());
+    }
+
+    public function testIsFromBrowserNotCachedAcrossCalls(): void
+    {
+        $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1)';
+        $this->assertTrue(PlumeHelper::isFromBrowser());
+
+        unset($_SERVER['HTTP_USER_AGENT']);
+        // Without static cache the result must reflect the updated UA on the next call.
+        $this->assertFalse(PlumeHelper::isFromBrowser());
     }
 }

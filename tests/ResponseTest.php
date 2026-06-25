@@ -77,6 +77,21 @@ class ResponseTest extends \PHPUnit\Framework\TestCase
         $this->assertArrayHasKey('Pragma', $headers);
     }
 
+    public function testCacheWithFalseProducesStringNotArray(): void
+    {
+        $this->response->cache(false);
+        $cc = $this->response->headers()['Cache-Control'];
+        $this->assertIsString($cc, 'Cache-Control should be a single string, not an array');
+    }
+
+    public function testCacheWithFalseOmitsIe6Directives(): void
+    {
+        $this->response->cache(false);
+        $cc = $this->response->headers()['Cache-Control'];
+        $this->assertStringNotContainsString('post-check', $cc);
+        $this->assertStringNotContainsString('pre-check', $cc);
+    }
+
     public function testCacheWithFutureTimestamp(): void
     {
         $future = time() + 3600;

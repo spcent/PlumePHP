@@ -534,9 +534,7 @@ class PlumeEngine
                 ->status(500)
                 ->write($msg)
                 ->send();
-        } catch (\Throwable $t) { // PHP 7.0+
-            exit($msg);
-        } catch (\Exception $e) { // PHP < 7
+        } catch (\Throwable $t) {
             exit($msg);
         }
     }
@@ -872,9 +870,10 @@ class PlumeEngine
             $className = $legacyClassName; // keep original for error message
         }
 
+        $safeRequest = array_diff_key($_REQUEST, array_flip(['password', 'passwd', 'pass', 'token', 'secret', 'card_no', 'cvv']));
         L('[web]class name:'.$className
             .', args:'.json_encode($args, JSON_UNESCAPED_UNICODE)
-            .', request: '.json_encode($_REQUEST, JSON_UNESCAPED_UNICODE));
+            .', request: '.json_encode($safeRequest, JSON_UNESCAPED_UNICODE));
 
         if (!class_exists($className)) {
             $this->_halt(404, '!!! 404 !!! uri='.$requestUri.' class not exist: '.$className);
