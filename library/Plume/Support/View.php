@@ -305,7 +305,7 @@ class PlumeView
      */
     public function e(string $str)
     {
-        echo htmlentities($str);
+        echo htmlspecialchars($str, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }
 /**

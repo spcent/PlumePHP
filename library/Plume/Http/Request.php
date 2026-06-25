@@ -181,7 +181,8 @@ class PlumeRequest
         $method = self::getVar('REQUEST_METHOD', 'GET');
         if (isset($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'])) {
             $method = $_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'];
-        } elseif (isset($_REQUEST['_method'])) {
+        } elseif (isset($_REQUEST['_method']) && strtoupper($method) === 'POST') {
+            // Only allow _method tunnelling on actual POST requests to prevent CSRF bypass
             $method = $_REQUEST['_method'];
         }
 

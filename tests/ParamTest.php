@@ -80,4 +80,17 @@ class ParamTest extends \PHPUnit\Framework\TestCase
         // that the raw type is preserved without wrapping.
         $this->assertSame('99.99', $param->price);
     }
+
+    public function testSetAcceptsMixedValues(): void
+    {
+        $param = new PlumeParam();
+        $param->items = [1, 2, 3];
+        $this->assertSame([1, 2, 3], $param->items);
+
+        $param->flag = true;
+        $this->assertTrue($param->flag);
+
+        $param->count = 42;
+        $this->assertSame(42, $param->count);
+    }
 }

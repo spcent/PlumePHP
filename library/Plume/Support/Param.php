@@ -51,7 +51,7 @@ class PlumeParam
         return htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 
-    public function __set(string $pn, string $val)
+    public function __set(string $pn, mixed $val)
     {
         if (!$pn) {
             return;

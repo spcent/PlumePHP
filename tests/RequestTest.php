@@ -85,9 +85,20 @@ class RequestTest extends \PHPUnit\Framework\TestCase
 
     public function testMethodOverrideWithPost()
     {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
         $_REQUEST['_method'] = 'PUT';
         $request = new PlumeRequest();
         $this->assertEquals('PUT', $request->method);
+    }
+
+    public function testMethodOverrideIgnoredOnGet(): void
+    {
+        unset($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE']);
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_REQUEST['_method'] = 'DELETE';
+        $request = new PlumeRequest();
+        // _method tunnelling must be ignored when the real method is not POST
+        $this->assertEquals('GET', $request->method);
     }
 
     public function testIsMobileReturnsFalseForDesktopUA(): void

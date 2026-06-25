@@ -117,4 +117,11 @@ class DotEnvTest extends \PHPUnit\Framework\TestCase
         $result = PlumeDotEnv::parse($this->tmpFile);
         $this->assertSame('has#hash', $result['KEY']);
     }
+
+    public function testTabBeforeHashInlineCommentStripped(): void
+    {
+        $this->write("KEY=hello\t# tab inline comment\n");
+        $result = PlumeDotEnv::parse($this->tmpFile);
+        $this->assertSame('hello', $result['KEY']);
+    }
 }

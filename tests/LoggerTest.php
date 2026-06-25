@@ -142,4 +142,18 @@ class LoggerTest extends \PHPUnit\Framework\TestCase
         clearstatcache(true, $logFile);
         $this->assertEquals($sizeBefore, filesize($logFile));
     }
+
+    public function testNoticeGoesToBothLogAndWfFile(): void
+    {
+        $this->logger->notice('notice message');
+        $this->logger->save();
+
+        $logFile = $this->logDir . '/' . date('Ymd') . '.log';
+        $wfFile  = $this->logDir . '/' . date('Ymd') . '.log.wf';
+
+        $this->assertFileExists($logFile, 'NOTICE should appear in .log');
+        $this->assertFileExists($wfFile, 'NOTICE should also appear in .log.wf');
+        $this->assertStringContainsString('[NOTICE]notice message', file_get_contents($logFile));
+        $this->assertStringContainsString('[NOTICE]notice message', file_get_contents($wfFile));
+    }
 }

@@ -70,17 +70,23 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
         }
 
         if (empty($this->logId)) {
-            $this->logId = sprintf('%x', ((int) (microtime(true) * 10000) % 864000000) * 10000 + mt_rand(0, 9999));
+            $this->logId = sprintf('%x', ((int) (microtime(true) * 10000) % 864000000) * 10000 + random_int(0, 9999));
         }
 
         $log_message = date('[Y-m-d H:i:s]').'['.$this->logId.']'."[{$level}]".$msg.PHP_EOL;
         $upperLevel  = strtoupper($level);
 
-        match(true) {
-            $upperLevel === 'SQL' => file_put_contents($this->logPath.DS.date('Ymd').'.log.sql', $log_message, FILE_APPEND | LOCK_EX),
-            $wf                  => file_put_contents($this->logPath.DS.date('Ymd').'.log.wf', $log_message, FILE_APPEND | LOCK_EX),
-            default              => ($this->log[] = $log_message),
-        };
+        if ($upperLevel === 'SQL') {
+            file_put_contents($this->logPath.DS.date('Ymd').'.log.sql', $log_message, FILE_APPEND | LOCK_EX);
+        } elseif ($upperLevel === 'NOTICE') {
+            // NOTICE goes to both the buffered .log and the immediate .log.wf
+            $this->log[] = $log_message;
+            file_put_contents($this->logPath.DS.date('Ymd').'.log.wf', $log_message, FILE_APPEND | LOCK_EX);
+        } elseif ($wf) {
+            file_put_contents($this->logPath.DS.date('Ymd').'.log.wf', $log_message, FILE_APPEND | LOCK_EX);
+        } else {
+            $this->log[] = $log_message;
+        }
 
         foreach ($this->handlers as $handler) {
             $handler($level, $msg, $context);
