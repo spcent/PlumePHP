@@ -16,6 +16,9 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
         if (!$this->logPath) {
             $this->logPath = C('PLUME_LOG_PATH') ?: LOG_PATH;
         }
+        if (!is_dir($this->logPath)) {
+            mkdir($this->logPath, 0755, true);
+        }
     }
 
     public function __destruct()

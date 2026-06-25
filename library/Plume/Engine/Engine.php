@@ -424,6 +424,12 @@ class PlumeEngine
                 $response->status($code);
             }
 
+            // Release session file lock before flushing — prevents blocking all
+            // subsequent requests when using PHP's built-in server (single-process).
+            if (!IS_CLI && PHP_SESSION_ACTIVE === session_status()) {
+                session_write_close();
+            }
+
             $data = ob_get_clean();
             if (false !== $data) {
                 $response->write($data);

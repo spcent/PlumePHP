@@ -1,5 +1,29 @@
 PlumePHP - 羽量级的单文件php开发框架
 
+## 快速启动（无需 PHP-FPM / Nginx）
+
+PlumePHP 可直接使用 PHP 内置 Web Server 运行，无需配置任何 Web 服务器，适合本地研发和测试。
+
+```bash
+# 标准启动（推荐）
+php -S localhost:8000 -t public/ public/index.php
+
+# 指定 testing 环境（关闭 display_errors，保留错误报告）
+PLUME_PHP_ENV=testing php -S localhost:8000 -t public/ public/index.php
+
+# 通过框架 CLI 启动（等效于上面，已内置端口占用检测）
+php public/index.php -S
+php public/index.php -S -H 0.0.0.0 -P 9000   # 自定义地址端口
+php public/index.php -S -b                     # 后台运行
+
+# 运行 CLI 命令（脚本/定时任务模式）
+php public/index.php -m web -c migrate
+```
+
+> **注意**：PHP 内置 Server 是单进程的，一次只处理一个请求，仅用于开发测试，不适合生产环境。
+
+---
+
 ### 简介
 
 PlumePHP是一个单入口，单文件PHP框架，适用于简单系统的快速开发，提供了简单的路由方式，抛弃了坑爹的PHP模板，采用原生PHP语法来渲染页面。如果您正在开发一个简单的功能，而又不想使用Yii，CodeIgniter，ThinkPHP等框架，则可以试用一下该框架。
