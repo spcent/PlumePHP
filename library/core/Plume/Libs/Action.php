@@ -144,10 +144,6 @@ abstract class Action
             $csrfFormStr = sprintf('<input type="hidden" name="%s" value="%s" />', $this->csrfPostKey, $this->csrfToken);
             $viewObj->set('csrf_token', $this->getCsrfToken());
             $viewObj->set('csrf_field', $csrfFormStr);
-            // Legacy aliases kept for backward compatibility
-            $viewObj->set('csrfToken', $this->getCsrfToken());
-            $viewObj->set('csrfPost', $this->csrfPostKey);
-            $viewObj->set('_csrf_form_', $csrfFormStr);
         }
         header('Content-type: text/html; charset=utf-8');
 
