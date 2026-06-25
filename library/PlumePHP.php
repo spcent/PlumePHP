@@ -262,4 +262,41 @@ class PlumePHP
 
         return self::$engine;
     }
+
+    /**
+     * Resets per-request state for persistent worker processes
+     * (FrankenPHP worker mode, RoadRunner, etc.).
+     *
+     * Clears the router, loader instances, dispatcher filters, and engine vars,
+     * then re-applies framework defaults — without re-running boot(), so config,
+     * timezone, and environment are preserved across requests.
+     *
+     * Usage in a FrankenPHP worker entry point:
+     *
+     *   while (frankenphp_handle_request(function () {
+     *       PlumePHP::resetForWorker();
+     *       PlumePHP::route('*', fn() => PlumePHP::app()->runAction());
+     *       PlumePHP::start();
+     *   }));
+     */
+    public static function resetForWorker(): void
+    {
+        $engine = self::app();
+
+        // Preserve vars set by boot() that init() does not restore.
+        $preserved = [
+            'plumephp.env'            => $engine->get('plumephp.env'),
+            'plumephp.default.module' => $engine->get('plumephp.default.module'),
+        ];
+
+        // Re-run init(): resets vars, loader instances, dispatcher, and
+        // re-registers default components/methods. boot() is skipped because
+        // Engine::init() guards it with a static $initialized flag.
+        $engine->init();
+
+        // Restore boot-time vars that were cleared by init()'s vars reset.
+        foreach ($preserved as $key => $value) {
+            $engine->set($key, $value);
+        }
+    }
 }

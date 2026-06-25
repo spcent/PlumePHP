@@ -128,6 +128,15 @@ class PlumeEngine
             }
             // Set case-sensitivity
             $self->router()->case_sensitive = $self->get('plumephp.case_sensitive');
+
+            // Session management is done here rather than in boot() so that
+            // persistent worker processes (FrankenPHP worker mode) restart the
+            // session for every request after calling resetForWorker().
+            if (!IS_CLI && true === C('USE_SESSION') && PHP_SESSION_NONE === session_status()
+                && !headers_sent()) {
+                session_start();
+            }
+
             if (IS_CLI) {
                 // define STDIN, STDOUT and STDERR if the PHP SAPI did not define them
                 // (e.g. creating console application in web env)
@@ -967,11 +976,8 @@ class PlumeEngine
             }
         }
 
-        // session management
-        if (!IS_CLI && true === C('USE_SESSION') && PHP_SESSION_NONE === session_status()
-            && !headers_sent($filename, $linenum)) {
-            session_start();
-        }
+        // Session management moved to the before('start') hook in init() so it
+        // runs per-request in persistent worker processes (see resetForWorker).
 
         // Sets timezone
         $timezone = C('TIME_ZONE');

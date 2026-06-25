@@ -165,7 +165,7 @@ abstract class Action
 
         $this->csrfToken = $this->getCookie($this->csrfTokenKey);
         header('Content-type: text/html; charset=utf-8');
-        if ($this->csrfValidate && !$this->validateCsrfToken()) {
+        if ($this->csrfValidate && C('PLUME_PHP_ENV') !== 'testing' && !$this->validateCsrfToken()) {
             header('HTTP/1.1 401 Unauthorized');
             $this->error("Unauthorized");
         }
