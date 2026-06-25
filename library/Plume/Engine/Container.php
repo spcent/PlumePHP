@@ -65,7 +65,14 @@ class PlumeContainer implements \Psr\Container\ContainerInterface
             $this->resolving[$id] = true;
             try {
                 $instance = $this->loader->load($concrete);
-                return $instance ?? new $concrete();
+                if ($instance !== null) {
+                    return $instance;
+                }
+                $ref = new \ReflectionClass($concrete);
+                if ($ref->isAbstract() || $ref->isInterface()) {
+                    throw new PlumeContainerException("Cannot instantiate abstract class or interface '{$concrete}'.");
+                }
+                return new $concrete();
             } finally {
                 unset($this->resolving[$id]);
             }

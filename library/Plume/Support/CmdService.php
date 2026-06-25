@@ -268,7 +268,7 @@ class PlumeCmdService
      */
     protected function showWelcome()
     {
-        echo "➤ PlumePHP ".PLUME_VERSION.": Wellcome, for more info , use --help \n";
+        echo "➤ PlumePHP ".PLUME_VERSION.": Welcome, for more info, use --help\n";
     }
 
     /**

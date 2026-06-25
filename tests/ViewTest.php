@@ -69,4 +69,23 @@ class ViewTest extends \PHPUnit\Framework\TestCase
         $this->view->render('world', null, false);
         $this->expectOutputString('Hello world, Bob!');
     }
+
+    public function testEEscapesHtmlSpecialChars(): void
+    {
+        ob_start();
+        $this->view->e('<script>alert("xss") & more</script>');
+        $output = ob_get_clean();
+        $this->assertStringNotContainsString('<script>', $output);
+        $this->assertStringContainsString('&lt;script&gt;', $output);
+        $this->assertStringContainsString('&amp;', $output);
+    }
+
+    public function testEEscapesQuotes(): void
+    {
+        ob_start();
+        $this->view->e("it's a \"test\"");
+        $output = ob_get_clean();
+        $this->assertStringContainsString('&#039;', $output);
+        $this->assertStringContainsString('&quot;', $output);
+    }
 }

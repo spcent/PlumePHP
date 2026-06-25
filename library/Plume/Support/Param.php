@@ -38,15 +38,20 @@ class PlumeParam
 
     public function __get(string $pn)
     {
-        $v = $this->getValue($pn);
-        if (is_string($v)) {
-            $v = htmlentities($v, ENT_QUOTES);
-        }
-
-        return $v;
+        return $this->getValue($pn);
     }
 
-    public function __set(string $pn, string $val)
+    /**
+     * Returns the parameter value HTML-escaped for safe output in templates.
+     * Use this instead of __get() when inserting into HTML context.
+     */
+    public function html(string $pn): string
+    {
+        $v = $this->getValue($pn);
+        return htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+
+    public function __set(string $pn, mixed $val)
     {
         if (!$pn) {
             return;

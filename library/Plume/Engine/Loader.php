@@ -139,6 +139,8 @@ class PlumeLoader
 
     /**
      * Resets the object to the initial state.
+     * Note: static $dirs is intentionally NOT reset — autoload paths are process-global
+     * and shared across all engine instances (including worker-mode resets).
      */
     public function reset()
     {

@@ -108,4 +108,16 @@ class RouteCacheTest extends \PHPUnit\Framework\TestCase
         $this->router->route($this->makeRequest('/hello'));
         $this->assertFileDoesNotExist($this->cacheFile);
     }
+
+    public function testSaveCacheDoesNotLeaveTmpFile(): void
+    {
+        $this->router->map('/atomic', fn() => 'ok');
+        $this->router->enableCache($this->cacheFile);
+        $this->router->route($this->makeRequest('/atomic'));
+
+        $this->assertFileExists($this->cacheFile);
+        // Atomic write via temp+rename: no .tmp file should linger
+        $tmpGlob = glob(dirname($this->cacheFile) . '/*.tmp') ?: [];
+        $this->assertEmpty($tmpGlob, 'Temporary .tmp file should not persist after atomic rename');
+    }
 }

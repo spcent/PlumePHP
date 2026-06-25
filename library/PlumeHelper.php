@@ -159,19 +159,14 @@ class PlumeHelper
 
     public static function isFromBrowser(): bool
     {
-        static $retVal = null;
-        if ($retVal === null) {
-            $retVal = false;
-            $ua     = isset($_SERVER['HTTP_USER_AGENT']) ? strtolower($_SERVER['HTTP_USER_AGENT']) : '';
-            if ($ua) {
-                if ((strpos($ua, 'mozilla') !== false) && ((strpos($ua, 'msie') !== false) || (strpos($ua, 'gecko') !== false))) {
-                    $retVal = true;
-                } elseif (strpos($ua, 'opera')) {
-                    $retVal = true;
-                }
-            }
+        $ua = isset($_SERVER['HTTP_USER_AGENT']) ? strtolower($_SERVER['HTTP_USER_AGENT']) : '';
+        if (!$ua) {
+            return false;
         }
-        return $retVal;
+        if ((strpos($ua, 'mozilla') !== false) && ((strpos($ua, 'msie') !== false) || (strpos($ua, 'gecko') !== false))) {
+            return true;
+        }
+        return strpos($ua, 'opera') !== false;
     }
 
     public static function getCurrentUrl(bool $isDomain = false): string
@@ -185,7 +180,14 @@ class PlumeHelper
         } else {
             $url .= $_SERVER['HTTP_HOST'];
         }
-        return $isDomain ? $url : $url . $_SERVER['REQUEST_URI'];
+        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        // Encode non-ASCII and URI-unsafe bytes while preserving valid percent-encoded sequences.
+        $uri = preg_replace_callback(
+            '/[^\x21-\x7E]|[<>"\'\\\\]/',
+            fn(array $m): string => rawurlencode($m[0]),
+            $uri
+        );
+        return $isDomain ? $url : $url . $uri;
     }
 
     // -----------------------------------------------------------------------
@@ -198,7 +200,7 @@ class PlumeHelper
         $str     = '';
         $charLen = strlen($chars);
         for ($i = 0; $i < $length; $i++) {
-            $str .= $chars[mt_rand(0, $charLen - 1)];
+            $str .= $chars[random_int(0, $charLen - 1)];
         }
         return $str;
     }
@@ -225,7 +227,7 @@ class PlumeHelper
         return $resolved[$type];
     }
 
-    public static function signature(array $datas, string $key = 'afjd32t4-#of=2a;2fd#c@ff'): string
+    public static function signature(array $datas, string $key): string
     {
         ksort($datas);
         $tmp = [];
@@ -248,8 +250,18 @@ class PlumeHelper
         return (string) preg_replace($filter, $replace, $html);
     }
 
+    /**
+     * @deprecated since PlumePHP 1.4.0 — uses MD5-based RC4 stream cipher (Discuz legacy).
+     *   Replace with sodium_crypto_secretbox() or openssl_encrypt('AES-256-GCM', ...).
+     *   This function will be removed in a future major version.
+     */
     public static function authcode(string $string, string $operation = 'DECODE', string $key = '', int $expiry = 0): string
     {
+        trigger_error(
+            'PlumeHelper::authcode() is deprecated and uses MD5/RC4 — not cryptographically safe. '
+            . 'Use sodium_crypto_secretbox() or openssl_encrypt() instead.',
+            E_USER_DEPRECATED
+        );
         $ckeyLength = 4;
         $key        = md5($key ?: 'plumephp');
         $keya       = md5(substr($key, 0, 16));

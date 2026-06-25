@@ -142,10 +142,10 @@ abstract class Action
         $viewObj = \PlumePHP::view();
         if ($this->csrfValidate) {
             $csrfFormStr = sprintf('<input type="hidden" name="%s" value="%s" />', $this->csrfPostKey, $this->csrfToken);
-            $viewObj->set('csrfToken', $this->getCsrfToken());
-            $viewObj->set('csrfPost', $this->csrfPostKey);
-            $viewObj->set('_csrf_form_', $csrfFormStr);
+            $viewObj->set('csrf_token', $this->getCsrfToken());
+            $viewObj->set('csrf_field', $csrfFormStr);
         }
+        header('Content-type: text/html; charset=utf-8');
 
         $viewObj->set('js_files', $this->jsFiles);
         $viewObj->set('css_files', $this->cssFiles);
@@ -164,7 +164,6 @@ abstract class Action
         }
 
         $this->csrfToken = $this->getCookie($this->csrfTokenKey);
-        header('Content-type: text/html; charset=utf-8');
         if ($this->csrfValidate && C('PLUME_PHP_ENV') !== 'testing' && !$this->validateCsrfToken()) {
             header('HTTP/1.1 401 Unauthorized');
             $this->error("Unauthorized");
@@ -294,6 +293,7 @@ abstract class Action
     public function error($msg = "数据异常", $code = 1, $json = false)
     {
         if (!$json && !IS_AJAX) {
+            $escapedMsg = htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $html = <<<EOF
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -306,7 +306,7 @@ abstract class Action
     <body>
     <div class="container">
         <h1>出错啦！</h1>
-        <p class="msg">{$msg}</p>
+        <p class="msg">{$escapedMsg}</p>
     </div>
     </body>
 </html>
@@ -371,7 +371,20 @@ EOF;
     private function getCsrfKey(): string
     {
         $secret = getenv('APP_SECRET');
-        return $secret ?: 'plumephp-csrf-fallback-key';
+        if (!$secret) {
+            $env = defined('PLUME_PHP_ENV') ? constant('PLUME_PHP_ENV') : (C('PLUME_PHP_ENV') ?: '');
+            if ($env !== 'testing') {
+                throw new \RuntimeException(
+                    'APP_SECRET environment variable must be set to enable CSRF protection. '
+                    . 'Add APP_SECRET=<random-32-char-string> to your .env file.'
+                );
+            }
+            return 'plumephp-csrf-testing-key';
+        }
+        if (strlen($secret) < 16) {
+            throw new \RuntimeException('APP_SECRET must be at least 16 characters long.');
+        }
+        return $secret;
     }
 
     /**
@@ -380,8 +393,7 @@ EOF;
      */
     private function createCsrfCookie($token)
     {
-        $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-.';
-        $mask = substr(str_shuffle(str_repeat($chars, 5)), 0, 8);
+        $mask = random_bytes(8);
         return str_replace('+', '.', base64_encode($mask . $this->xorTokens($token, $mask)));
     }
 
@@ -439,7 +451,7 @@ EOF;
         }
 
         $cookieValue = $_COOKIE[$trueToken];
-        $hashLength = mb_strlen(hash_hmac('sha256', '', ''), '8bit');
+        $hashLength = 64; // SHA-256 HMAC hex output is always 64 bytes
         $storedHash = mb_substr($cookieValue, 0, $hashLength, '8bit');
         $rawPayload = mb_substr($cookieValue, $hashLength, mb_strlen($cookieValue, '8bit'), '8bit');
         $expectedHash = hash_hmac('sha256', $rawPayload, $this->getCsrfKey());

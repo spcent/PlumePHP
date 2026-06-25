@@ -534,9 +534,7 @@ class PlumeEngine
                 ->status(500)
                 ->write($msg)
                 ->send();
-        } catch (\Throwable $t) { // PHP 7.0+
-            exit($msg);
-        } catch (\Exception $e) { // PHP < 7
+        } catch (\Throwable $t) {
             exit($msg);
         }
     }
@@ -726,6 +724,11 @@ class PlumeEngine
      */
     public function runAction()
     {
+        // Per-worker-process cache for file_exists() results.
+        // Files don't change between requests in production, so caching for
+        // the worker's lifetime is safe and eliminates repeated stat() calls.
+        static $pathCache = [];
+
         $startTime = microtime(true);
         $requestUri = $_SERVER['REQUEST_URI'];
         $vdname = C('VDNAME');
@@ -796,7 +799,8 @@ class PlumeEngine
             }
 
             if (empty($name)) {
-                if (!file_exists($filepath.DS.'index.action.php')) {
+                $indexPath = $filepath.DS.'index.action.php';
+                if (!($pathCache[$indexPath] ??= file_exists($indexPath))) {
                     $this->_halt(404, '!!! 404(missing index) !!! uri: '.$requestUri
                                                 .', urlPath: '.$urlPath);
                 }
@@ -806,7 +810,7 @@ class PlumeEngine
             }
 
             $sPath = $filepath.DS.$name;
-            if (file_exists($sPath)) {
+            if ($pathCache[$sPath] ??= file_exists($sPath)) {
                 $filepath .= DS.$name;
                 $file .= DS.$name;
 
@@ -814,7 +818,7 @@ class PlumeEngine
             }
 
             $sPath .= '.action.php';
-            if (file_exists($sPath)) {
+            if ($pathCache[$sPath] ??= file_exists($sPath)) {
                 $file .= DS.$name;
 
                 break;
@@ -830,7 +834,7 @@ class PlumeEngine
 
         // Loads the action file
         $actionFile = APP_PATH.DS.$module.DS.'actions'.DS.$file.'.action.php';
-        if (!file_exists($actionFile)) {
+        if (!($pathCache[$actionFile] ??= file_exists($actionFile))) {
             $this->_halt(404, '!!! 404(missing action file) !!! uri: '.$requestUri
                                 .' action file: '.substr($actionFile, strlen(APP_PATH)));
         }
@@ -866,9 +870,10 @@ class PlumeEngine
             $className = $legacyClassName; // keep original for error message
         }
 
+        $safeRequest = array_diff_key($_REQUEST, array_flip(['password', 'passwd', 'pass', 'token', 'secret', 'card_no', 'cvv']));
         L('[web]class name:'.$className
             .', args:'.json_encode($args, JSON_UNESCAPED_UNICODE)
-            .', request: '.json_encode($_REQUEST, JSON_UNESCAPED_UNICODE));
+            .', request: '.json_encode($safeRequest, JSON_UNESCAPED_UNICODE));
 
         if (!class_exists($className)) {
             $this->_halt(404, '!!! 404 !!! uri='.$requestUri.' class not exist: '.$className);
@@ -998,6 +1003,11 @@ class PlumeEngine
                 L($msg, [], 'FATAL', true);
             }
         });
+
+        // Snapshot boot-time config so resetForWorker() can restore it,
+        // preventing per-request C() writes from leaking across requests
+        // in persistent worker processes (FrankenPHP, RoadRunner).
+        C("\x00snapshot_take\x00");
     }
 }
 /**

@@ -39,9 +39,9 @@ class PlumeDotEnv
         if (strlen($value) >= 2 && $value[0] === "'" && $value[-1] === "'") {
             return substr($value, 1, -1);
         }
-        // Strip inline comment (space + #)
-        if (($pos = strpos($value, ' #')) !== false) {
-            $value = trim(substr($value, 0, $pos));
+        // Strip inline comment (space + # or tab + #)
+        if (preg_match('/^([^#]*)[ \t]#/', $value, $m)) {
+            $value = trim($m[1]);
         }
         return match(strtolower($value)) {
             'true', 'yes', 'on'  => true,

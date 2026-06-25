@@ -89,4 +89,12 @@ class ContainerBindingTest extends \PHPUnit\Framework\TestCase
         $this->container->get('probe');
         $this->assertSame($this->container, $received);
     }
+
+    public function testBindingAbstractClassThrows(): void
+    {
+        $this->container->bind('abstractTest', ContainerTestLogger::class);
+        $this->expectException(PlumeContainerException::class);
+        $this->expectExceptionMessageMatches('/Cannot instantiate abstract class or interface/');
+        $this->container->get('abstractTest');
+    }
 }

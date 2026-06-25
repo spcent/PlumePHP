@@ -181,7 +181,8 @@ class PlumeRequest
         $method = self::getVar('REQUEST_METHOD', 'GET');
         if (isset($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'])) {
             $method = $_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'];
-        } elseif (isset($_REQUEST['_method'])) {
+        } elseif (isset($_REQUEST['_method']) && strtoupper($method) === 'POST') {
+            // Only allow _method tunnelling on actual POST requests to prevent CSRF bypass
             $method = $_REQUEST['_method'];
         }
 
@@ -233,8 +234,9 @@ class PlumeRequest
         $regex_match .= '|mqqbrowser|juc|iuc|ios|ipad';
         $regex_match .= ')/i';
 
-        return isset($_SERVER['HTTP_X_WAP_PROFILE']) or isset($_SERVER['HTTP_PROFILE'])
-                        or preg_match($regex_match, strtolower($_SERVER['HTTP_USER_AGENT']));
+        return isset($_SERVER['HTTP_X_WAP_PROFILE'])
+            || isset($_SERVER['HTTP_PROFILE'])
+            || (bool) preg_match($regex_match, strtolower($_SERVER['HTTP_USER_AGENT'] ?? ''));
     }
 }
 /**

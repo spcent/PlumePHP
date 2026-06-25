@@ -133,7 +133,7 @@ class PlumeRouter
         return true;
     }
 
-    /** Writes all compiled regex patterns to the cache file. */
+    /** Writes all compiled regex patterns to the cache file atomically. */
     private function saveCache(): void
     {
         $data = [];
@@ -145,11 +145,13 @@ class PlumeRouter
         if (!is_dir($cacheDir)) {
             mkdir($cacheDir, 0755, true);
         }
+        $tmp = $this->cacheFile . '.' . getmypid() . '.tmp';
         file_put_contents(
-            $this->cacheFile,
+            $tmp,
             '<?php return ' . var_export($data, true) . ';' . PHP_EOL,
             LOCK_EX
         );
+        rename($tmp, $this->cacheFile);
     }
 
     /**

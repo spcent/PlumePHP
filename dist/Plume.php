@@ -4974,7 +4974,7 @@ class PlumeHelper
         return $resolved[$type];
     }
 
-    public static function signature(array $datas, string $key = 'afjd32t4-#of=2a;2fd#c@ff'): string
+    public static function signature(array $datas, string $key): string
     {
         ksort($datas);
         $tmp = [];

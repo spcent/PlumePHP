@@ -16,8 +16,7 @@ class PlumeSchema implements \JsonSerializable
         if (null !== $param) {
             $mapper = new PlumeJsonMapper();
             $mapper->bEnforceMapType = false;
-    
-            return $mapper->map($param->toArray(), $this);
+            $mapper->map($param->toArray(), $this);
         }
     }
 
@@ -34,15 +33,22 @@ class PlumeSchema implements \JsonSerializable
      */
     public function jsonSerialize(): mixed
     {
-        $reflectObj = new \ReflectionClass($this);
-        $res = [];
-        foreach ($reflectObj->getProperties(\ReflectionProperty::IS_PUBLIC) as $property) {
-            if (!$property->isStatic()) {
-                $name = $this->camelCaseToSnake($property->getName());
-                $res[$name] = $property->getValue($this);
+        // Cache property→snake_name map per subclass to avoid repeated ReflectionClass calls.
+        static $propMap = [];
+        $class = static::class;
+        if (!isset($propMap[$class])) {
+            $names = [];
+            foreach ((new \ReflectionClass($class))->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+                if (!$prop->isStatic()) {
+                    $names[$prop->getName()] = $this->camelCaseToSnake($prop->getName());
+                }
             }
+            $propMap[$class] = $names;
         }
-
+        $res = [];
+        foreach ($propMap[$class] as $propName => $snakeName) {
+            $res[$snakeName] = $this->$propName;
+        }
         return $res;
     }
 

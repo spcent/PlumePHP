@@ -128,7 +128,7 @@ class PlumeRoute
      */
     public function matchMethod(string $method): bool
     {
-        return count(array_intersect([$method, '*'], $this->methods)) > 0;
+        return in_array('*', $this->methods, true) || in_array($method, $this->methods, true);
     }
 
     /**

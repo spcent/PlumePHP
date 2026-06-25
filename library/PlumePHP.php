@@ -42,6 +42,21 @@ if (!interface_exists('JsonSerializable')) {
 function C($key, $value = null)
 {
     static $_config = [];
+    static $_snapshot = null;
+
+    // Internal snapshot operations for worker-mode config isolation.
+    // Using null-byte sentinel values to avoid collision with real config keys.
+    if ($key === "\x00snapshot_take\x00") {
+        $_snapshot = $_config;
+        return null;
+    }
+    if ($key === "\x00snapshot_restore\x00") {
+        if ($_snapshot !== null) {
+            $_config = $_snapshot;
+        }
+        return null;
+    }
+
     $args = func_num_args();
     if (1 === $args) {
         if (is_string($key)) {
@@ -298,5 +313,9 @@ class PlumePHP
         foreach ($preserved as $key => $value) {
             $engine->set($key, $value);
         }
+
+        // Restore C() config to boot-time snapshot, discarding any per-request
+        // mutations written by application code during the previous request.
+        C("\x00snapshot_restore\x00");
     }
 }
