@@ -713,184 +713,77 @@ class PlumeEngine
      * Default routing rule with unified format
      * https://your.domain.com[/module][/file][/k/v...].
      *
-     * Remark：
-     * 1. Module,file is the corresponding directory or file (without suffix)
-     * 2. K is the parameter name, v is the parameter value, can be repeated,
-     *    such as: id/2/dir/xy with 2 parameters: id=2 and dir=xy
-     * 3. [] brackets indicate dispensable
-     * 4. If no one matches then match with the next one
-     * 5. If there is no file, the default is index.php. If there is file,
-     *    the default is file.php
+     * Delegates to ActionResolver (URL parsing), ActionLocator (filesystem),
+     * ActionNaming (class name), and ActionInvoker (instantiation + run).
      */
     public function runAction()
     {
-        // Per-worker-process cache for file_exists() results.
-        // Files don't change between requests in production, so caching for
-        // the worker's lifetime is safe and eliminates repeated stat() calls.
-        static $pathCache = [];
-
-        $startTime = microtime(true);
+        $startTime  = microtime(true);
         $requestUri = $_SERVER['REQUEST_URI'];
-        $vdname = C('VDNAME');
-        if (!empty($vdname)) {
-            $vdname = '/'.$vdname;
-            $urlPath = substr($requestUri, strlen($vdname));
-        } else {
-            $urlPath = $requestUri;
-        }
-        // Path alias
-        $pathalias = C('PATH_ALIAS');
-        if (is_array($pathalias)) {
-            foreach ($pathalias as $k => $v) {
-                if (false !== strpos($urlPath, $k)) {
-                    $urlPath = str_replace($k, $v, $urlPath);
 
-                    break;
-                }
-            }
-        }
+        // 1. Parse URL → module, pathnames, initial GET args
+        $parsed = ActionResolver::parse(
+            $requestUri,
+            (string) (C('VDNAME') ?? ''),
+            C('PATH_ALIAS')
+        );
 
-        // Request parameters
-        $args = [];
-        $pos = strpos($urlPath, '?');
-        if (false !== $pos) {
-            parse_str(substr($urlPath, $pos + 1), $args);
-            $urlPath = substr($urlPath, 0, $pos);
-        }
+        $pathnames = $parsed['pathnames'];
+        $args      = $parsed['args'];
+        $urlPath   = $parsed['urlPath'];
 
-        $file = '';
-        $module = '';
-        // Prevents request addresses from being too long, up to 64
-        $pathnames = explode('/', $urlPath, 64);
-        // The default home page
-        if (empty($pathnames) || empty($pathnames[1]) || 'index.php' === $pathnames[1]) {
-            $module = $this->get('plumephp.default.module');
-        } else {
-            // The leftmost represents the module name
-            $module = $pathnames[1];
-        }
+        $defaultModule = $this->get('plumephp.default.module') ?? 'web';
+        $module        = ActionResolver::extractModule($pathnames, $defaultModule);
+        $module        = trim($module);
 
-        $module = trim($module);
         $this->set('plumephp.module', $module);
         $this->set('plumephp.urlPath', $urlPath);
-        // Loads the module boot file {$module}.boot.php, and each module has a startup file
-        I(APP_PATH.DS.$module.DS.$module.'.boot.php');
 
-        $filepath = APP_PATH;
-        $namecount = count($pathnames);
-        $index = 1;
-        $preg = '/^([a-z]+)[a-z0-9_]*$/i';
-        for ($index = 1; $index < $namecount; $index++) {
-            $name = trim($pathnames[$index]);
-            if (!empty($name) && (!preg_match($preg, $name) || strlen($name) > 15)) {
-                $this->_halt(404, '!!! 404(invalid) !!! uri: '.$requestUri
-                                        .', urlPath: '.$urlPath.', name: '.$name);
+        // 2. Load module boot file
+        I(APP_PATH . DS . $module . DS . $module . '.boot.php');
+
+        // Handle bare /  or /index.php → serve "index" action directly
+        $firstSeg = trim($pathnames[1] ?? '');
+        if ($firstSeg === '' || $firstSeg === 'index.php') {
+            $file       = 'index';
+            $actionFile = APP_PATH . DS . $module . DS . 'actions' . DS . 'index.action.php';
+            $stopIndex  = 1;
+            if (!file_exists($actionFile)) {
+                $this->_halt(404, '!!! 404(missing index action) !!! uri: ' . $requestUri);
             }
-            // default: index.php default home page
-            if (1 === $index) {
-                if (empty($name) || 'index.php' === $name) {
-                    $file = 'index';
+            require $actionFile;
+        } else {
+            // 3. Locate action file by walking URL segments
+            $located   = ActionLocator::locate($module, $pathnames, $requestUri);
+            $file      = $located['file'];
+            $actionFile = $located['actionFile'];
+            $stopIndex  = $located['stopIndex'];
 
-                    break;
-                }
-                $filepath .= DS.$name.DS.'actions';
-
-                continue;
-            }
-
-            if (empty($name)) {
-                $indexPath = $filepath.DS.'index.action.php';
-                if (!($pathCache[$indexPath] ??= file_exists($indexPath))) {
-                    $this->_halt(404, '!!! 404(missing index) !!! uri: '.$requestUri
-                                                .', urlPath: '.$urlPath);
-                }
-                $file .= DS.'index';
-
-                break;
-            }
-
-            $sPath = $filepath.DS.$name;
-            if ($pathCache[$sPath] ??= file_exists($sPath)) {
-                $filepath .= DS.$name;
-                $file .= DS.$name;
-
-                continue;
-            }
-
-            $sPath .= '.action.php';
-            if ($pathCache[$sPath] ??= file_exists($sPath)) {
-                $file .= DS.$name;
-
-                break;
-            }
-            $this->_halt(404, '!!! 404 !!! uri='.$requestUri
-                                        .' parseto:'.substr($sPath, strlen(APP_PATH)));
+            require $actionFile;
         }
 
-        $file = trim($file, DS);
-        if (empty($file)) {
-            $file = 'index';
-        }
-
-        // Loads the action file
-        $actionFile = APP_PATH.DS.$module.DS.'actions'.DS.$file.'.action.php';
-        if (!($pathCache[$actionFile] ??= file_exists($actionFile))) {
-            $this->_halt(404, '!!! 404(missing action file) !!! uri: '.$requestUri
-                                .' action file: '.substr($actionFile, strlen(APP_PATH)));
-        }
-
-        require $actionFile;
-
-        // Packaging residual arguments
-        for ($i = $index + 1; $i < $namecount; $i += 2) {
-            $k = $pathnames[$i];
-            $v = null;
-            if ($i + 1 < $namecount) {
-                $v = $pathnames[$i + 1];
-            }
-            $args[$k] = $v;
-        }
+        // 4. Collect tail key→value pairs from remaining URL segments
+        $args = ActionResolver::collectTailArgs($pathnames, $stopIndex, $args);
 
         $this->set('plumephp.file', $file);
         $this->set('plumephp.args', $args);
 
-        // Legacy naming: web_home_action
-        $legacyClassName = $module.'_'.str_replace(DS, '_', $file).'_action';
+        // 5. Resolve class name (legacy or PSR-4)
+        $className = ActionNaming::resolve($module, $file);
 
-        // PSR-4 naming: App\{Module}\Actions\{Controller}Action
-        // e.g. App\Web\Actions\HomeAction
-        $nsSegments = array_map('ucfirst', explode(DS, $file));
-        $nsClassName = 'App\\'.ucfirst($module).'\\Actions\\'.implode('\\', $nsSegments).'Action';
-
-        if (class_exists($legacyClassName)) {
-            $className = $legacyClassName;
-        } elseif (class_exists($nsClassName)) {
-            $className = $nsClassName;
-        } else {
-            $className = $legacyClassName; // keep original for error message
-        }
-
-        $safeRequest = array_diff_key($_REQUEST, array_flip(['password', 'passwd', 'pass', 'token', 'secret', 'card_no', 'cvv']));
-        L('[web]class name:'.$className
-            .', args:'.json_encode($args, JSON_UNESCAPED_UNICODE)
-            .', request: '.json_encode($safeRequest, JSON_UNESCAPED_UNICODE));
-
-        if (!class_exists($className)) {
-            $this->_halt(404, '!!! 404 !!! uri='.$requestUri.' class not exist: '.$className);
-        }
-
-        $actionInstance = new $className();
-
-        // Find the corresponding method according to the action
-        if (!method_exists($actionInstance, 'run')) {
-            $this->_halt(404, '!!! 404 !!! uri='.$requestUri.' no run method: '.$className);
-        }
-
-        $res = $actionInstance->run();
-        L('[web]class name: {class} success, result: {result}, cost: {cost}s', [
+        L('[web]class name:{class}, args:{args}, request:{req}', [
             'class' => $className,
-            'result'=> substr(json_encode($res, JSON_UNESCAPED_UNICODE), 0, 200),
-            'cost'  => round(microtime(true) - $startTime, 3),
+            'args'  => json_encode($args, JSON_UNESCAPED_UNICODE),
+            'req'   => json_encode(ActionInvoker::sanitizeForLog($_REQUEST), JSON_UNESCAPED_UNICODE),
+        ]);
+
+        // 6. Instantiate and run
+        $res = ActionInvoker::invoke($className, $requestUri);
+
+        L('[web]class name: {class} success, result: {result}, cost: {cost}s', [
+            'class'  => $className,
+            'result' => substr(json_encode($res, JSON_UNESCAPED_UNICODE), 0, 200),
+            'cost'   => round(microtime(true) - $startTime, 3),
         ]);
 
         return $res;

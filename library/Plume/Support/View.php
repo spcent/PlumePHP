@@ -195,11 +195,31 @@ class PlumeView
 
     /**
      * Compiles template syntax sugar to plain PHP.
+     *
+     * Supported directives (processed in order):
+     *   {# comment #}                        → removed
+     *   {extends 'parent'}                   → compile-time template inheritance
+     *   {block 'name'}...{/block}            → define/override a named block
+     *   {yield 'name'}                       → output a block in the parent template
+     *   {$var|raw}                           → unescaped echo
+     *   {$var}                               → htmlspecialchars-escaped echo
+     *
+     * Inheritance is resolved at compile time: child blocks are injected into the
+     * parent source before any PHP is emitted, so the result is a single flat
+     * template with no runtime includes.
      */
     protected function compileTemplate(string $source): string
     {
         // Strip {# comment #} blocks
         $source = preg_replace('/\{#.*?#\}/s', '', $source);
+
+        // Template inheritance: {extends 'parent'} or {extends "parent"}
+        if (preg_match('/^\s*\{extends\s+[\'"]([^\'"]+)[\'"]\s*\}/s', $source, $m)) {
+            $source = $this->resolveInheritance($source, $m[1]);
+        }
+
+        // Any remaining {yield 'name'} in standalone templates → empty string
+        $source = preg_replace('/\{yield\s+[\'"][^\'"]*[\'"]\s*\}/', '', (string) $source);
 
         // {$var|raw} compiles to unescaped echo tag
         $source = preg_replace(
@@ -216,6 +236,62 @@ class PlumeView
         );
 
         return $source;
+    }
+
+    /**
+     * Resolve template inheritance at compile time.
+     *
+     * 1. Extract all {block}...{/block} definitions from the child source.
+     * 2. Load the parent source.
+     * 3. Replace {yield 'name'} in the parent with child block content (or empty string).
+     * 4. Replace {block 'name'}...{/block} in the parent with the child override or the
+     *    parent's own default content.
+     * 5. Return the fully merged source for normal compilation.
+     *
+     * @param string $childSource Full child template source (including {extends …})
+     * @param string $parentName  Parent template name (without path/extension)
+     *
+     * @return string Merged template source ready for variable-substitution compilation
+     */
+    private function resolveInheritance(string $childSource, string $parentName): string
+    {
+        $parentPath = $this->path . DS . $parentName . $this->extension;
+        if (!file_exists($parentPath)) {
+            return $childSource;
+        }
+
+        // Strip {extends …} directive from child
+        $childBody = preg_replace('/^\s*\{extends\s+[\'"][^\'"]+[\'"]\s*\}\s*/s', '', $childSource);
+        // Strip comments from child body
+        $childBody = preg_replace('/\{#.*?#\}/s', '', (string) $childBody);
+
+        // Collect child block definitions: name → raw inner content
+        $childBlocks = [];
+        if (preg_match_all('/\{block\s+[\'"]([^\'"]+)[\'"]\s*\}(.*?)\{\/block\}/s', (string) $childBody, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $childBlocks[$match[1]] = $match[2];
+            }
+        }
+
+        // Load and clean parent source
+        $parentSource = (string) file_get_contents($parentPath);
+        $parentSource = preg_replace('/\{#.*?#\}/s', '', $parentSource);
+
+        // Replace {yield 'name'} with child block content (or empty string)
+        $merged = preg_replace_callback(
+            '/\{yield\s+[\'"]([^\'"]+)[\'"]\s*\}/',
+            fn (array $m): string => $childBlocks[$m[1]] ?? '',
+            (string) $parentSource
+        );
+
+        // Replace {block 'name'}...{/block} in parent with child override or parent default
+        $merged = preg_replace_callback(
+            '/\{block\s+[\'"]([^\'"]+)[\'"]\s*\}(.*?)\{\/block\}/s',
+            fn (array $m): string => $childBlocks[$m[1]] ?? $m[2],
+            (string) $merged
+        );
+
+        return (string) $merged;
     }
 
     /**

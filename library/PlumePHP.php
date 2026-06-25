@@ -43,16 +43,21 @@ function C($key, $value = null)
 {
     static $_config = [];
     static $_snapshot = null;
+    // Read-path cache: stores resolved values for dot-notation string keys.
+    // Invalidated on any write so stale data is never served.
+    static $_readCache = [];
 
     // Internal snapshot operations for worker-mode config isolation.
     // Using null-byte sentinel values to avoid collision with real config keys.
     if ($key === "\x00snapshot_take\x00") {
-        $_snapshot = $_config;
+        $_snapshot  = $_config;
+        $_readCache = [];
         return null;
     }
     if ($key === "\x00snapshot_restore\x00") {
         if ($_snapshot !== null) {
-            $_config = $_snapshot;
+            $_config    = $_snapshot;
+            $_readCache = [];
         }
         return null;
     }
@@ -60,42 +65,50 @@ function C($key, $value = null)
     $args = func_num_args();
     if (1 === $args) {
         if (is_string($key)) {
-            // Up to three layers
-            $names = explode('.', $key, 3);
+            // Serve from read cache when available (hot path in Worker mode)
+            if (isset($_readCache[$key])) {
+                return $_readCache[$key];
+            }
+
+            // Up to three layers of dot-notation
+            $names      = explode('.', $key, 3);
             $countNames = count($names);
             if (1 === $countNames) {
-                return isset($_config[$key]) ? $_config[$key] : null;
+                $result = $_config[$key] ?? null;
+            } elseif (2 === $countNames) {
+                $result = $_config[$names[0]][$names[1]] ?? null;
+            } else {
+                $result = $_config[$names[0]][$names[1]][$names[2]] ?? null;
             }
-            if (2 === $countNames) {
-                $key1 = $names[0];
-                $key2 = $names[1];
 
-                return isset($_config[$key1][$key2])
-                    ? $_config[$key1][$key2] : null;
-            }
-            $key1 = $names[0];
-            $key2 = $names[1];
-            $key3 = $names[2];
-
-            return isset($_config[$key1][$key2][$key3])
-                ? $_config[$key1][$key2][$key3] : null;
+            $_readCache[$key] = $result;
+            return $result;
         }
 
         if (is_array($key)) {
             if (array_keys($key) !== range(0, count($key) - 1)) {
-                $_config = array_merge($_config, $key);
+                // Associative array → bulk write; invalidate cache
+                $_config    = array_merge($_config, $key);
+                $_readCache = [];
             } else {
+                // Numeric-indexed array → bulk read (not cached individually)
                 $ret = [];
                 foreach ($key as $k) {
-                    $ret[$k] = isset($_config[$k]) ? $_config[$k] : null;
+                    $ret[$k] = $_config[$k] ?? null;
                 }
-
                 return $ret;
             }
         }
     } else {
         if (is_string($key)) {
             $_config[$key] = $value;
+            // Invalidate any cached entry that starts with this key
+            // (covers both the exact key and parent dot-paths)
+            foreach (array_keys($_readCache) as $ck) {
+                if ($ck === $key || str_starts_with($ck, $key . '.')) {
+                    unset($_readCache[$ck]);
+                }
+            }
         }
     }
 
@@ -186,10 +199,16 @@ require_once __DIR__ . '/Plume/Engine/Container.php';
 require_once __DIR__ . '/Plume/Engine/Event.php';
 require_once __DIR__ . '/Plume/Support/Param.php';
 require_once __DIR__ . '/Plume/Support/Logger.php';
+require_once __DIR__ . '/Plume/Support/LogHandlers.php';
 require_once __DIR__ . '/Plume/Support/Schema.php';
 require_once __DIR__ . '/Plume/Support/JsonMapper.php';
+require_once __DIR__ . '/Plume/Engine/ActionResolver.php';
+require_once __DIR__ . '/Plume/Engine/ActionLocator.php';
+require_once __DIR__ . '/Plume/Engine/ActionNaming.php';
+require_once __DIR__ . '/Plume/Engine/ActionInvoker.php';
 require_once __DIR__ . '/Plume/Engine/Engine.php';
 require_once __DIR__ . '/Plume/Support/CmdService.php';
+require_once __DIR__ . '/Plume/Support/DocGenerator.php';
 require_once __DIR__ . '/PlumeHelper.php';
 
 /**

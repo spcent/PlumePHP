@@ -40,15 +40,26 @@ abstract class Action
      *
      * Format:
      *   protected array $rules = [
-     *       'field'  => 'required',
-     *       'age'    => 'required|int|min:18|max:120',
-     *       'email'  => 'required|email',
-     *       'name'   => 'required|string|minLen:2|maxLen:64',
-     *       'status' => 'int',
+     *       'field'   => 'required',
+     *       'age'     => 'required|int|min:18|max:120',
+     *       'email'   => 'required|email',
+     *       'name'    => 'required|string|minLen:2|maxLen:64',
+     *       'status'  => 'required|in:active,inactive,pending',
+     *       'phone'   => 'required|regex:/^1[3-9]\d{9}$/',
+     *       'avatar'  => 'file|mimes:jpg,jpeg,png|maxSize:2048',
+     *       'pass2'   => 'required|confirmed:password',
+     *       'tags'    => 'array|each:string',
      *   ];
      *
-     * Supported constraints: required, int, float, string, email,
-     *   min:<n>, max:<n>, minLen:<n>, maxLen:<n>
+     * Supported constraints:
+     *   required, int, float, string, email,
+     *   min:<n>, max:<n>, minLen:<n>, maxLen:<n>,
+     *   regex:<pattern>, in:<v1,v2,...>,
+     *   file, mimes:<ext,...>, maxSize:<kb>,
+     *   confirmed[:<other_field>], array, each:<rule>
+     *
+     * Register project-level custom rules once at boot time:
+     *   Action::addRule('phone_cn', fn($v) => (bool)preg_match('/^1[3-9]\d{9}$/', $v));
      *
      * Override validate() for custom logic; return an array of field→message
      * pairs to signal failure, or an empty array on success.
@@ -56,6 +67,20 @@ abstract class Action
      * @var array<string, string>
      */
     protected array $rules = [];
+
+    /** @var array<string, callable(mixed): bool> Globally registered custom rules */
+    private static array $customRules = [];
+
+    /**
+     * Register a named custom validation rule available to all Action subclasses.
+     *
+     * @param string   $name     Rule name used in $rules strings
+     * @param callable $callback fn(mixed $value): bool — true means valid
+     */
+    public static function addRule(string $name, callable $callback): void
+    {
+        self::$customRules[$name] = $callback;
+    }
 
     protected $jsFiles = [];
     protected $cssFiles = [];
@@ -204,54 +229,155 @@ abstract class Action
             $constraints = array_filter(array_map('trim', explode('|', $ruleStr)));
 
             foreach ($constraints as $constraint) {
-                [$rule, $arg] = array_pad(explode(':', $constraint, 2), 2, null);
+                // Split on first colon only; regex rules may contain colons inside the pattern
+                $colonPos = strpos($constraint, ':');
+                if ($colonPos !== false) {
+                    $rule = substr($constraint, 0, $colonPos);
+                    $arg  = substr($constraint, $colonPos + 1);
+                } else {
+                    $rule = $constraint;
+                    $arg  = null;
+                }
+
+                $empty = ($value === null || $value === '');
 
                 switch ($rule) {
                     case 'required':
-                        if ($value === null || $value === '') {
+                        if ($empty) {
                             $errors[$field] = "{$field} 不能为空";
                         }
                         break;
 
                     case 'int':
-                        if ($value !== null && $value !== '' && !ctype_digit((string) $value) && !is_int($value)) {
+                        if (!$empty && !ctype_digit((string) $value) && !is_int($value)) {
                             $errors[$field] = "{$field} 必须是整数";
                         }
                         break;
 
                     case 'float':
-                        if ($value !== null && $value !== '' && !is_numeric($value)) {
+                        if (!$empty && !is_numeric($value)) {
                             $errors[$field] = "{$field} 必须是数字";
                         }
                         break;
 
+                    case 'string':
+                        if (!$empty && !is_string($value)) {
+                            $errors[$field] = "{$field} 必须是字符串";
+                        }
+                        break;
+
                     case 'email':
-                        if ($value !== null && $value !== '' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                        if (!$empty && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
                             $errors[$field] = "{$field} 邮箱格式不正确";
                         }
                         break;
 
                     case 'min':
-                        if ($value !== null && $value !== '' && is_numeric($value) && (float) $value < (float) $arg) {
+                        if (!$empty && is_numeric($value) && (float) $value < (float) $arg) {
                             $errors[$field] = "{$field} 不能小于 {$arg}";
                         }
                         break;
 
                     case 'max':
-                        if ($value !== null && $value !== '' && is_numeric($value) && (float) $value > (float) $arg) {
+                        if (!$empty && is_numeric($value) && (float) $value > (float) $arg) {
                             $errors[$field] = "{$field} 不能大于 {$arg}";
                         }
                         break;
 
                     case 'minLen':
-                        if ($value !== null && mb_strlen((string) $value) < (int) $arg) {
+                        if (!$empty && mb_strlen((string) $value) < (int) $arg) {
                             $errors[$field] = "{$field} 长度不能少于 {$arg} 个字符";
                         }
                         break;
 
                     case 'maxLen':
-                        if ($value !== null && mb_strlen((string) $value) > (int) $arg) {
+                        if (!$empty && mb_strlen((string) $value) > (int) $arg) {
                             $errors[$field] = "{$field} 长度不能超过 {$arg} 个字符";
+                        }
+                        break;
+
+                    case 'regex':
+                        // arg is the pattern, e.g.  /^1[3-9]\d{9}$/
+                        if (!$empty && !preg_match((string) $arg, (string) $value)) {
+                            $errors[$field] = "{$field} 格式不正确";
+                        }
+                        break;
+
+                    case 'in':
+                        // arg is comma-separated allowed values, e.g. active,inactive,pending
+                        if (!$empty) {
+                            $allowed = array_map('trim', explode(',', (string) $arg));
+                            if (!in_array((string) $value, $allowed, true)) {
+                                $errors[$field] = "{$field} 的值必须是以下之一: {$arg}";
+                            }
+                        }
+                        break;
+
+                    case 'confirmed':
+                        // Verify value equals another field (default: {field}_confirm)
+                        $otherField = $arg ?: ($field . '_confirm');
+                        $other      = $this->getParam($otherField);
+                        if ($value !== $other) {
+                            $errors[$field] = "{$field} 与 {$otherField} 不一致";
+                        }
+                        break;
+
+                    case 'array':
+                        if (!$empty && !is_array($value)) {
+                            $errors[$field] = "{$field} 必须是数组";
+                        }
+                        break;
+
+                    case 'each':
+                        // Apply a single sub-rule to every element of an array field
+                        if (is_array($value) && $arg !== null) {
+                            foreach ($value as $idx => $item) {
+                                $subErrors = $this->applySimpleRule("{$field}[{$idx}]", $item, (string) $arg, null);
+                                if ($subErrors) {
+                                    $errors[$field] = $subErrors;
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+
+                    case 'file':
+                        // Checks the field exists in $_FILES and has no upload error
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo === null || ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                            $errors[$field] = "{$field} 文件上传失败或未选择文件";
+                        }
+                        break;
+
+                    case 'mimes':
+                        // Comma-separated extensions, e.g. jpg,jpeg,png
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo && ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                            $ext      = strtolower(pathinfo($fileInfo['name'], PATHINFO_EXTENSION));
+                            $allowed  = array_map('trim', explode(',', strtolower((string) $arg)));
+                            if (!in_array($ext, $allowed, true)) {
+                                $errors[$field] = "{$field} 只允许上传: {$arg} 格式的文件";
+                            }
+                        }
+                        break;
+
+                    case 'maxSize':
+                        // Maximum file size in kilobytes
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo && ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                            $sizeKb = ($fileInfo['size'] ?? 0) / 1024;
+                            if ($sizeKb > (float) $arg) {
+                                $errors[$field] = "{$field} 文件大小不能超过 {$arg}KB";
+                            }
+                        }
+                        break;
+
+                    default:
+                        // Check registered custom rules
+                        if (isset(self::$customRules[$rule])) {
+                            if (!$empty && !(self::$customRules[$rule])($value)) {
+                                $errors[$field] = "{$field} 格式不正确";
+                            }
                         }
                         break;
                 }
@@ -263,6 +389,26 @@ abstract class Action
             }
         }
         return $errors;
+    }
+
+    /**
+     * Apply a single named rule to $value; used internally by the "each" rule.
+     *
+     * @return string Error message, or empty string if valid
+     */
+    private function applySimpleRule(string $label, mixed $value, string $rule, ?string $arg): string
+    {
+        $empty = ($value === null || $value === '');
+        return match ($rule) {
+            'required' => $empty ? "{$label} 不能为空" : '',
+            'int'      => (!$empty && !ctype_digit((string) $value) && !is_int($value))
+                              ? "{$label} 必须是整数" : '',
+            'float'    => (!$empty && !is_numeric($value)) ? "{$label} 必须是数字" : '',
+            'string'   => (!$empty && !is_string($value)) ? "{$label} 必须是字符串" : '',
+            'email'    => (!$empty && !filter_var($value, FILTER_VALIDATE_EMAIL))
+                              ? "{$label} 邮箱格式不正确" : '',
+            default    => '',
+        };
     }
 
     /**
