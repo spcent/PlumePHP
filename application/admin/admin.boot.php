@@ -1,24 +1,33 @@
 <?php
 
-PlumePHP::app()->path(PLUME_PHP_PATH.DS.'library'.DS.'core');
+PlumePHP::app()->path(PLUME_PHP_PATH . DS . 'library' . DS . 'core');
 
-/**
- * abstract class for wx
- */
-abstract class web_base_action extends \Plume\Libs\Action
+abstract class admin_base_action extends \Plume\Libs\Action
 {
-    /**
-     * csrf验证
-     * @var bool
-     */
-    protected $csrfValidate = false;
-    public function init()
+    protected $csrfValidate = true;
+    protected $requireAdmin = true;
+
+    public function init(): bool
     {
+        if (!$this->requireAdmin) {
+            return true;
+        }
+
+        if (empty($_SESSION['admin_id'])) {
+            if (IS_AJAX) {
+                $this->error('请先登录', 401, true);
+            }
+            redirect('/admin/auth/login');
+        }
+
+        // 超级简单的角色检查
+        if (empty($_SESSION['admin_role']) || $_SESSION['admin_role'] !== 'admin') {
+            $this->error('权限不足', 403, IS_AJAX);
+        }
+
         return true;
     }
-    /**
-     * execute方法
-     */
+
     public function execute()
     {
         if ($this->init()) {
@@ -26,27 +35,22 @@ abstract class web_base_action extends \Plume\Libs\Action
         }
     }
 
-    /**
-     * Execute the action
-     *
-     * @abstract
-     * @access public
-     * @return bool True if the action was executed or false when not executed
-     */
     abstract public function invoke();
+
+    protected function adminUser(): array
+    {
+        return [
+            'id'   => $_SESSION['admin_id']   ?? 0,
+            'name' => $_SESSION['admin_name'] ?? '',
+        ];
+    }
 }
 
-class web_base_cmd
+class admin_base_cmd
 {
-    /**
-     * 日志记录
-     */
-    protected function output($msg, $isEcho = true)
+    protected function log(string $msg): void
     {
-        if ($isEcho) {
-            echo $msg, PHP_EOL;
-        }
-
-        PlumeLog::info($msg);
+        echo '[' . date('H:i:s') . '] ' . $msg . PHP_EOL;
+        L($msg, [], 'INFO');
     }
 }
