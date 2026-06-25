@@ -337,9 +337,9 @@ EOF;
      * @param $value
      * @param int $expire
      * @param string $path
-     * @param null $domain
+     * @param string $domain
      */
-    public function setCookie($key, $value, $expire = 86400, $path = '/', $domain = null)
+    public function setCookie($key, $value, $expire = 86400, $path = '/', $domain = '')
     {
         setcookie($key, $value, time() + $expire, $path, $domain);
     }
