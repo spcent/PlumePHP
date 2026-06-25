@@ -115,4 +115,31 @@ class LoggerTest extends \PHPUnit\Framework\TestCase
         $content = file_get_contents($logFile);
         $this->assertEquals(1, substr_count($content, 'first'));
     }
+
+    public function testSaveIsIdempotentOnEmptyBuffer(): void
+    {
+        $this->logger->save();
+        $this->logger->save();
+
+        $logFile = $this->logDir . '/' . date('Ymd') . '.log';
+        $this->assertFileDoesNotExist($logFile);
+    }
+
+    public function testExplicitSaveFlushesBeforeDestruct(): void
+    {
+        // Verify that calling save() manually produces the same result as __destruct()
+        // — the shutdown_function registration ensures logs are not lost on fatal errors.
+        $logger = new PlumeLogger('flush-test', $this->logDir);
+        $logger->info('will-be-flushed');
+        $logger->save();
+
+        $logFile = $this->logDir . '/' . date('Ymd') . '.log';
+        $this->assertStringContainsString('will-be-flushed', file_get_contents($logFile));
+
+        // After save(), a subsequent save() is a no-op (buffer cleared).
+        $sizeBefore = filesize($logFile);
+        $logger->save();
+        clearstatcache(true, $logFile);
+        $this->assertEquals($sizeBefore, filesize($logFile));
+    }
 }

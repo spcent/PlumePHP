@@ -248,8 +248,18 @@ class PlumeHelper
         return (string) preg_replace($filter, $replace, $html);
     }
 
+    /**
+     * @deprecated since PlumePHP 1.4.0 — uses MD5-based RC4 stream cipher (Discuz legacy).
+     *   Replace with sodium_crypto_secretbox() or openssl_encrypt('AES-256-GCM', ...).
+     *   This function will be removed in a future major version.
+     */
     public static function authcode(string $string, string $operation = 'DECODE', string $key = '', int $expiry = 0): string
     {
+        trigger_error(
+            'PlumeHelper::authcode() is deprecated and uses MD5/RC4 — not cryptographically safe. '
+            . 'Use sodium_crypto_secretbox() or openssl_encrypt() instead.',
+            E_USER_DEPRECATED
+        );
         $ckeyLength = 4;
         $key        = md5($key ?: 'plumephp');
         $keya       = md5(substr($key, 0, 16));

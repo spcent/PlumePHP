@@ -19,6 +19,11 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
         if (!is_dir($this->logPath)) {
             mkdir($this->logPath, 0755, true);
         }
+
+        // Flush buffered DEBUG/INFO/NOTICE logs on shutdown so fatal errors
+        // (OOM, parse errors) do not silently discard in-flight log entries.
+        // __destruct() is not guaranteed to run on fatal errors.
+        register_shutdown_function([$this, 'save']);
     }
 
     public function __destruct()

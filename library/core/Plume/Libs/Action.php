@@ -371,7 +371,20 @@ EOF;
     private function getCsrfKey(): string
     {
         $secret = getenv('APP_SECRET');
-        return $secret ?: 'plumephp-csrf-fallback-key';
+        if (!$secret) {
+            $env = defined('PLUME_PHP_ENV') ? constant('PLUME_PHP_ENV') : (C('PLUME_PHP_ENV') ?: '');
+            if ($env !== 'testing') {
+                throw new \RuntimeException(
+                    'APP_SECRET environment variable must be set to enable CSRF protection. '
+                    . 'Add APP_SECRET=<random-32-char-string> to your .env file.'
+                );
+            }
+            return 'plumephp-csrf-testing-key';
+        }
+        if (strlen($secret) < 16) {
+            throw new \RuntimeException('APP_SECRET must be at least 16 characters long.');
+        }
+        return $secret;
     }
 
     /**

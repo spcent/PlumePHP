@@ -39,7 +39,13 @@ class CsrfTest extends \PHPUnit\Framework\TestCase
         $_COOKIE    = [];
         $_POST      = [];
         $_SERVER    = [];
+        putenv('APP_SECRET=plume-test-secret-key-for-phpunit');
         $this->action = new CsrfTestAction();
+    }
+
+    public function tearDown(): void
+    {
+        putenv('APP_SECRET');
     }
 
     public function testGetRequestAlwaysPasses(): void
@@ -114,5 +120,51 @@ class CsrfTest extends \PHPUnit\Framework\TestCase
         $_SERVER['REQUEST_METHOD'] = 'PATCH';
         $_COOKIE = [];
         $this->assertFalse($this->action->publicValidateCsrfToken());
+    }
+
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testMissingAppSecretInNonTestingEnvThrows(): void
+    {
+        // Ensure APP_SECRET is absent and env is not 'testing'
+        putenv('APP_SECRET');
+        putenv('PLUME_PHP_ENV=production');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/APP_SECRET/');
+
+        // Create a fresh action in a context where env is 'production'
+        // getCsrfKey() reads getenv('APP_SECRET') — absent → throws
+        $action = new CsrfTestAction();
+        // Directly invoke the HMAC key lookup via token creation
+        $action->publicCreateCsrfToken();
+    }
+
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testShortAppSecretThrows(): void
+    {
+        putenv('APP_SECRET=short');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/at least 16 characters/');
+
+        $action = new CsrfTestAction();
+        $action->publicCreateCsrfToken();
+    }
+
+    /**
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function testValidAppSecretIsAccepted(): void
+    {
+        putenv('APP_SECRET=my-strong-secret-key-1234567890');
+        $action = new CsrfTestAction();
+        $token = $action->publicCreateCsrfToken();
+        $this->assertNotEmpty($token);
     }
 }

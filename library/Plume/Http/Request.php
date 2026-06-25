@@ -233,8 +233,9 @@ class PlumeRequest
         $regex_match .= '|mqqbrowser|juc|iuc|ios|ipad';
         $regex_match .= ')/i';
 
-        return isset($_SERVER['HTTP_X_WAP_PROFILE']) or isset($_SERVER['HTTP_PROFILE'])
-                        or preg_match($regex_match, strtolower($_SERVER['HTTP_USER_AGENT']));
+        return isset($_SERVER['HTTP_X_WAP_PROFILE'])
+            || isset($_SERVER['HTTP_PROFILE'])
+            || (bool) preg_match($regex_match, strtolower($_SERVER['HTTP_USER_AGENT'] ?? ''));
     }
 }
 /**
