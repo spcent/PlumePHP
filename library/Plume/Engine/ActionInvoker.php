@@ -38,9 +38,9 @@ class ActionInvoker
     /**
      * Filter sensitive fields out of a request array before logging.
      *
-     * @param array $request Typically $_REQUEST
+     * @param array<string, mixed> $request Typically $_REQUEST
      *
-     * @return array Sanitised copy
+     * @return array<string, mixed> Sanitised copy
      */
     public static function sanitizeForLog(array $request): array
     {

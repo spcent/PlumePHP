@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 class PlumeParam
 {
-    public $module;
-    public $class;
-    public $func;
-    private $urlparam = [];
+    public ?string $module = null;
+    public ?string $class = null;
+    public ?string $func = null;
 
+    /** @var array<array-key, mixed> */
+    private array $urlparam = [];
+
+    /**
+     * @param array<array-key, mixed> $params
+     */
     public function __construct(array $params = [])
     {
         if (!empty($_SERVER['QUERY_STRING'])) {
@@ -36,7 +41,7 @@ class PlumeParam
         }
     }
 
-    public function __get(string $pn)
+    public function __get(string $pn): mixed
     {
         return $this->getValue($pn);
     }
@@ -59,12 +64,12 @@ class PlumeParam
         $this->urlparam[$pn] = $val;
     }
 
-    public function __toString()
+    public function __toString(): string
     {
-        return json_encode($this->urlparam, JSON_UNESCAPED_UNICODE);
+        return (string) json_encode($this->urlparam, JSON_UNESCAPED_UNICODE);
     }
 
-    public function getValue(string $pn, string $default = '')
+    public function getValue(string $pn, string $default = ''): mixed
     {
         if (isset($this->urlparam[$pn])) {
             return $this->urlparam[$pn];
@@ -82,7 +87,10 @@ class PlumeParam
         return false;
     }
 
-    public function updateParams(array $arr)
+    /**
+     * @param array<array-key, mixed> $arr
+     */
+    public function updateParams(array $arr): static
     {
         if (!$arr) {
             return $this;
@@ -93,7 +101,10 @@ class PlumeParam
         return $this;
     }
 
-    public function toArray()
+    /**
+     * @return array<array-key, mixed>
+     */
+    public function toArray(): array
     {
         return $this->urlparam;
     }

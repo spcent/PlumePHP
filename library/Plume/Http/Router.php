@@ -6,10 +6,8 @@ class PlumeRouter
 {
     /**
      * Case sensitive matching.
-     *
-     * @var bool
      */
-    public $case_sensitive = false;
+    public bool $case_sensitive = false;
 
     /** Path to the compiled-route cache file; null = caching disabled. */
     private ?string $cacheFile = null;
@@ -20,16 +18,14 @@ class PlumeRouter
     /**
      * Mapped routes.
      *
-     * @var array
+     * @var PlumeRoute[]
      */
-    protected $routes = [];
+    protected array $routes = [];
 
     /**
      * Pointer to current route.
-     *
-     * @var int
      */
-    protected $index = 0;
+    protected int $index = 0;
 
     /** Returns the current PlumeRequest (injected by Engine; falls back to facade). */
     private \Closure $requestProvider;
@@ -46,9 +42,9 @@ class PlumeRouter
     /**
      * Gets mapped routes.
      *
-     * @return array Array of routes
+     * @return PlumeRoute[]
      */
-    public function getRoutes()
+    public function getRoutes(): array
     {
         return $this->routes;
     }
@@ -56,7 +52,7 @@ class PlumeRouter
     /**
      * Clears all routes in the router.
      */
-    public function clear()
+    public function clear(): void
     {
         $this->routes = [];
     }
@@ -68,7 +64,7 @@ class PlumeRouter
      * @param callable $callback   Callback function
      * @param bool     $pass_route Pass the matching route object to the callback
      */
-    public function map(string $pattern, callable $callback, bool $pass_route = false)
+    public function map(string $pattern, callable $callback, bool $pass_route = false): void
     {
         $url = $pattern;
         $methods = ['*'];
@@ -97,7 +93,7 @@ class PlumeRouter
         $this->cacheFile = $cacheFile;
     }
 
-    public function route(PlumeRequest $request)
+    public function route(PlumeRequest $request): PlumeRoute|false
     {
         if ($this->cacheFile !== null && !$this->cacheLoaded) {
             $this->cacheLoaded = true;
@@ -129,7 +125,7 @@ class PlumeRouter
     /** Loads compiled regex from the cache file and applies to registered routes. */
     private function loadCache(): bool
     {
-        if (!file_exists($this->cacheFile)) {
+        if ($this->cacheFile === null || !file_exists($this->cacheFile)) {
             return false;
         }
         $data = include $this->cacheFile;
@@ -148,6 +144,9 @@ class PlumeRouter
     /** Writes all compiled regex patterns to the cache file atomically. */
     private function saveCache(): void
     {
+        if ($this->cacheFile === null) {
+            return;
+        }
         $data = [];
         foreach ($this->routes as $route) {
             [$regex, $ids] = $route->compile();
@@ -189,7 +188,7 @@ class PlumeRouter
     /**
      * Reset to the first route.
      */
-    public function reset()
+    public function reset(): void
     {
         $this->index = 0;
     }
@@ -206,9 +205,9 @@ class PlumeRouter
      * Each callback inside the closure inherits the prefix and is wrapped with
      * the supplied middleware stack automatically.
      *
-     * @param string        $prefix      URL prefix applied to every route in the group
-     * @param callable      $callback    Receives $this router; registers child routes
-     * @param array         $middlewares Array of PlumeMiddlewareInterface class names
+     * @param string                                       $prefix      URL prefix applied to every route in the group
+     * @param callable                                     $callback    Receives $this router; registers child routes
+     * @param array<class-string<PlumeMiddlewareInterface>> $middlewares Array of PlumeMiddlewareInterface class names
      */
     public function group(string $prefix, callable $callback, array $middlewares = []): void
     {

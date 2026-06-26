@@ -21,25 +21,18 @@ defined('VENDOR_PATH') or define('VENDOR_PATH', PLUME_PHP_PATH.DS.'vendor');
 defined('LOG_PATH') or define('LOG_PATH', PLUME_PHP_PATH.DS.'storage'.DS.'log');
 defined('IS_CLI') or define('IS_CLI', PHP_SAPI === 'cli' ? 1 : 0);
 
-if (!interface_exists('JsonSerializable')) {
-    interface JsonSerializable
-    {
-        public function jsonSerialize();
-    }
-}
-
 /**
  * Gets and sets configuration parameters to support bulk definition
  * If $key is an associative array, the configuration is written as k-v.
  * If $key is a numeric indexed array, the corresponding configuration
  * array is returned.
  *
- * @param array|string $key   The key
- * @param null|array   $value The value
+ * @param mixed $key   The key (string for single-key get/set, array for bulk get/set)
+ * @param mixed $value The value when setting a single key
  *
- * @return null|array
+ * @return mixed
  */
-function C($key, $value = null)
+function C(mixed $key, mixed $value = null): mixed
 {
     static $_config = [];
     static $_snapshot = null;
@@ -105,7 +98,7 @@ function C($key, $value = null)
             // Invalidate any cached entry that starts with this key
             // (covers both the exact key and parent dot-paths)
             foreach (array_keys($_readCache) as $ck) {
-                if ($ck === $key || str_starts_with($ck, $key . '.')) {
+                if ($ck === $key || str_starts_with((string) $ck, $key . '.')) {
                     unset($_readCache[$ck]);
                 }
             }
@@ -122,7 +115,7 @@ function C($key, $value = null)
  *
  * @return void
  */
-function I(string $path, bool $once = false)
+function I(string $path, bool $once = false): void
 {
     if (file_exists($path)) {
         $once ? include_once $path : include $path;
@@ -131,13 +124,13 @@ function I(string $path, bool $once = false)
 /**
  * Record log.
  *
- * @param string $msg     The record
- * @param array  $context Replaces the placeholder in the record information
- *                        with context information, which is empty by default
- * @param string $level   Log level, the default is DEBUG
- * @param bool   $wf      Whether to log in a separate wf log, the default is false
+ * @param string               $msg     The record
+ * @param array<string, mixed> $context Replaces the placeholder in the record information
+ *                                      with context information, which is empty by default
+ * @param string               $level   Log level, the default is DEBUG
+ * @param bool                 $wf      Whether to log in a separate wf log, the default is false
  */
-function L(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false)
+function L(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false): void
 {
     PlumePHP::app()->log($msg, $context, $level, $wf);
 }
@@ -145,9 +138,9 @@ function L(string $msg, array $context = [], string $level = 'DEBUG', bool $wf =
  * Gets the exception stack.
  *
  * @param mixed $e
- * @param mixed $offset
+ * @param int   $offset
  */
-function T($e, $offset = 9)
+function T(mixed $e, int $offset = 9): string
 {
     $removeThisCall = false;
     if (empty($e) || !is_a($e, 'Exception')) {
@@ -167,7 +160,8 @@ function T($e, $offset = 9)
     $result = [];
     for ($i = 0; $i < $length; $i++) {
         // replace '#someNum' with '$i)', set the right ordering
-        $result[] = ($i + 1).')'.substr($trace[$i], strpos($trace[$i], ' '));
+        $pos = strpos($trace[$i], ' ');
+        $result[] = ($i + 1).')'.($pos !== false ? substr($trace[$i], $pos) : $trace[$i]);
     }
 
     return "\t".implode("\n\t", $result);
@@ -178,7 +172,7 @@ function T($e, $offset = 9)
  * @param string     $prefix The prefix of message
  * @param \Exception $e      The exception object
  */
-function E(string $prefix, Exception $e)
+function E(string $prefix, Exception $e): void
 {
     L($prefix.$e->getMessage().PHP_EOL.T($e, 9), [], 'ERROR', true);
 }
@@ -280,7 +274,10 @@ class PlumePHP
      *
      * @return mixed Callback results
      */
-    public static function __callStatic(string $name, array $params)
+    /**
+     * @param mixed[] $params
+     */
+    public static function __callStatic(string $name, array $params): mixed
     {
         $engine = self::app();
         if (method_exists($engine, $name) && !$engine->getDispatcher()->hasFilters($name)) {

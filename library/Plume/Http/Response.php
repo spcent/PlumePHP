@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 class PlumeResponse
 {
-    public $etag = false;
+    public bool|string $etag = false;
 
     /**
-     * @var array HTTP status codes
+     * @var array<int, string> HTTP status codes
      */
-    public static $codes = [
+    public static array $codes = [
         100 => 'Continue',
         101 => 'Switching Protocols',
         102 => 'Processing',
@@ -79,25 +79,17 @@ class PlumeResponse
         510 => 'Not Extended',
         511 => 'Network Authentication Required',
     ];
-    /**
-     * @var int HTTP status
-     */
-    protected $status = 200;
+    /** @var int HTTP status */
+    protected int $status = 200;
 
-    /**
-     * @var array HTTP headers
-     */
-    protected $headers = [];
+    /** @var array<string, mixed> HTTP headers */
+    protected array $headers = [];
 
-    /**
-     * @var string HTTP response body
-     */
-    protected $body;
+    /** @var string HTTP response body */
+    protected string $body = '';
 
-    /**
-     * @var bool HTTP response sent
-     */
-    protected $sent = false;
+    /** @var bool HTTP response sent */
+    protected bool $sent = false;
 
     /**
      * Sets the HTTP status of the response.
@@ -126,12 +118,12 @@ class PlumeResponse
     /**
      * Adds a header to the response.
      *
-     * @param array|string $name  Header name or array of names and values
-     * @param string       $value Header value
+     * @param array<string, string>|string $name  Header name or array of names and values
+     * @param string|null                  $value Header value
      *
-     * @return object Self reference
+     * @return static Self reference
      */
-    public function header($name, ?string $value = null)
+    public function header(string|array $name, ?string $value = null): static
     {
         if (is_array($name)) {
             foreach ($name as $k => $v) {
@@ -147,9 +139,9 @@ class PlumeResponse
     /**
      * Returns the headers from the response.
      *
-     * @return array
+     * @return array<string, mixed>
      */
-    public function headers()
+    public function headers(): array
     {
         return $this->headers;
     }
@@ -159,9 +151,9 @@ class PlumeResponse
      *
      * @param string $str Response content
      *
-     * @return object Self reference
+     * @return static Self reference
      */
-    public function write(string $str)
+    public function write(string $str): static
     {
         $this->body .= $str;
 
@@ -171,9 +163,9 @@ class PlumeResponse
     /**
      * Clears the response.
      *
-     * @return object Self reference
+     * @return static Self reference
      */
-    public function clear()
+    public function clear(): static
     {
         $this->status = 200;
         $this->headers = [];
@@ -187,16 +179,16 @@ class PlumeResponse
      *
      * @param int|string $expires Expiration time
      *
-     * @return object Self reference
+     * @return static Self reference
      */
-    public function cache($expires)
+    public function cache(int|string|false $expires): static
     {
         if (false === $expires) {
             $this->headers['Expires'] = 'Mon, 26 Jul 1997 05:00:00 GMT';
             $this->headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0';
             $this->headers['Pragma'] = 'no-cache';
         } else {
-            $expires = is_int($expires) ? $expires : strtotime($expires);
+            $expires = is_int($expires) ? $expires : (int) strtotime($expires);
             $this->headers['Expires'] = gmdate('D, d M Y H:i:s', $expires).' GMT';
             $this->headers['Cache-Control'] = 'max-age='.($expires - time());
             if (isset($this->headers['Pragma']) && 'no-cache' === $this->headers['Pragma']) {
@@ -207,12 +199,7 @@ class PlumeResponse
         return $this;
     }
 
-    /**
-     * Sends HTTP headers.
-     *
-     * @return object Self reference
-     */
-    public function sendHeaders()
+    public function sendHeaders(): static
     {
         // Send status code header
         if (false !== strpos(PHP_SAPI, 'cgi')) {
@@ -253,7 +240,7 @@ class PlumeResponse
      *
      * @return int Content length in bytes
      */
-    public function getContentLength()
+    public function getContentLength(): int
     {
         return extension_loaded('mbstring')
             ? mb_strlen($this->body, 'latin1')
@@ -263,7 +250,7 @@ class PlumeResponse
     /**
      * Gets whether response was sent.
      */
-    public function sent()
+    public function sent(): bool
     {
         return $this->sent;
     }
@@ -271,7 +258,7 @@ class PlumeResponse
     /**
      * Sends a HTTP response.
      */
-    public function send()
+    public function send(): void
     {
         if ($this->sent) {
             return;

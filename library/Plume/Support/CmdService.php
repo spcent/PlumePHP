@@ -5,16 +5,18 @@ declare(strict_types=1);
 /** @phpstan-consistent-constructor */
 class PlumeCmdService
 {
-    public $options = [
+    /** @var array<string, string|bool> */
+    public array $options = [
         'host'          => '127.0.0.1',
         'port'          => '8080',
         'path'          => '',
         'path_document' => 'public',
     ];
 
-    public $pid = 0;
+    public int $pid = 0;
 
-    protected $cliOptions = [
+    /** @var array<string, array<string, string|bool>> */
+    protected array $cliOptions = [
         'help' => [
             'short' => 'h',
             'desc'  => 'show this help;',
@@ -70,22 +72,26 @@ class PlumeCmdService
         ],
     ];
 
-    protected $cliOptionsEx = [];
-    protected $args = [];
-    protected $docroot = '';
+    /** @var array<string, mixed> */
+    protected array $cliOptionsEx = [];
 
-    protected $host;
-    protected $port;
-    protected $isInited = false;
+    /** @var array<string, mixed> */
+    protected array $args = [];
 
-    protected static $_instances = [];
+    protected string $docroot = '';
+    protected ?string $host = null;
+    protected ?string $port = null;
+    protected bool $isInited = false;
+
+    /** @var array<class-string, static> */
+    protected static array $_instances = [];
 
     public function __construct()
     {
     }
 
     // embed
-    public static function instance($object = null)
+    public static function instance(mixed $object = null): static
     {
         if (defined('__SINGLETONEX_REPALACER')) {
             $callback = __SINGLETONEX_REPALACER;
@@ -108,12 +114,18 @@ class PlumeCmdService
         return $me;
     }
 
-    public static function runQuickly(array $options)
+    /**
+     * @param array<string, mixed> $options
+     */
+    public static function runQuickly(array $options): mixed
     {
         return static::instance()->init($options)->run();
     }
 
-    public function init(array $options, ?object $context = null)
+    /**
+     * @param array<string, mixed> $options
+     */
+    public function init(array $options, ?object $context = null): static
     {
         $this->options = array_replace_recursive($this->options, $options);
         $this->host = $this->options['host'];
@@ -163,15 +175,13 @@ class PlumeCmdService
             return 0;
         }
 
-        $module = $this->args['module'];
+        $module = (string) $this->args['module'];
         // Loads the boot file.
         I(APP_PATH.DS.$module.DS.$module.'.boot.php', true);
 
-        $file = $this->args['cmd'] ?? 'index';
-        if ($file) {
-            $file = str_replace(['\\', '/'], DS, $file);
-            $file = trim($file, DS);
-        }
+        $file = (string) ($this->args['cmd'] ?? 'index');
+        $file = str_replace(['\\', '/'], DS, $file);
+        $file = trim($file, DS);
 
         $filename = $file.'.cmd.php';
         $filename = APP_PATH.DS.$module.DS.'console'.DS.$filename;
@@ -184,7 +194,7 @@ class PlumeCmdService
         // Loads the file.
         require $filename;
 
-        L('[cli]class name: '.$className.', args: '.json_encode($this->args));
+        L('[cli]class name: '.$className.', args: '.(string) json_encode($this->args));
 
         if (!class_exists($className)) {
             return $this->error('Command class not found: '.$className);
@@ -202,7 +212,7 @@ class PlumeCmdService
     /**
      * Gets the pid of the server process.
      */
-    public function getPid()
+    public function getPid(): int
     {
         return $this->pid;
     }
@@ -210,10 +220,10 @@ class PlumeCmdService
     /**
      * Close the server.
      */
-    public function close()
+    public function close(): void
     {
         if (!$this->pid) {
-            return false;
+            return;
         }
         posix_kill($this->pid, 9);
     }
@@ -225,17 +235,19 @@ class PlumeCmdService
     }
 
     /**
-     * Gets the arguments.
-     *
-     * @param mixed $options
-     * @param mixed $optind
+     * @param string[] $longopts
+     * @return array<string, string|string[]|false>|false
      */
-    protected function getopt($options, array $longopts, &$optind)
+    protected function getopt(string $options, array $longopts, int &$optind): array|false
     {
         return getopt($options, $longopts, $optind); // @codeCoverageIgnore
     }
 
-    protected function parseCaptures(array $cliOptions)
+    /**
+     * @param array<string, array<string, string|bool>> $cliOptions
+     * @return array<string, mixed>
+     */
+    protected function parseCaptures(array $cliOptions): array
     {
         $shorts_map = [];
         $shorts = [];
@@ -249,7 +261,7 @@ class PlumeCmdService
                 $shorts_map[$v['short']] = $k;
             }
         }
-        $optind = null;
+        $optind = 0;
         $args = $this->getopt(implode('', ($shorts)), $longopts, $optind);
         $args = $args ?: [];
 
@@ -267,7 +279,7 @@ class PlumeCmdService
     /**
      * Shows the welcome message.
      */
-    protected function showWelcome()
+    protected function showWelcome(): void
     {
         echo "➤ PlumePHP ".PLUME_VERSION.": Welcome, for more info, use --help\n";
     }
@@ -275,7 +287,7 @@ class PlumeCmdService
     /**
      * Shows the help message.
      */
-    protected function showHelp()
+    protected function showHelp(): void
     {
         echo "➤ Usage :\n\n";
         foreach ($this->cliOptions as $k => $v) {
@@ -300,10 +312,10 @@ class PlumeCmdService
     /**
      * Runs the HTTP Server.
      */
-    protected function runHTTPServer()
+    protected function runHTTPServer(): mixed
     {
         // Check for port conflict before attempting to bind.
-        $sock = @fsockopen($this->host, (int) $this->port, $errno, $errstr, 1);
+        $sock = @fsockopen($this->host ?? '', (int) $this->port, $errno, $errstr, 1);
         if ($sock !== false) {
             fclose($sock);
             return $this->error("Port {$this->port} is already in use on {$this->host}");
@@ -329,7 +341,7 @@ class PlumeCmdService
             echo $cmd;
             echo "\n";
 
-            return;
+            return null;
         }
 
         if ($this->options['background'] ?? false) {

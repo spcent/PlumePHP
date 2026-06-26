@@ -29,19 +29,19 @@ declare(strict_types=1);
  */
 class PlumeDocGenerator
 {
-    /** @var array Accumulated OpenAPI paths */
+    /** @var array<string, mixed> Accumulated OpenAPI paths */
     private array $paths = [];
 
-    /** @var array Unique tag names */
+    /** @var array<string, bool> Unique tag names */
     private array $tags = [];
 
     /**
      * Scan $appPath for action files, parse annotations, return OpenAPI array.
      *
-     * @param string $appPath   Path to the application/ directory
-     * @param array  $info      Override the OpenAPI info block
+     * @param string               $appPath Path to the application/ directory
+     * @param array<string, mixed> $info    Override the OpenAPI info block
      *
-     * @return array OpenAPI 3.0 document as a PHP array
+     * @return array<string, mixed> OpenAPI 3.0 document as a PHP array
      */
     public static function generate(string $appPath, array $info = []): array
     {
@@ -215,6 +215,9 @@ class PlumeDocGenerator
 
     /**
      * Build the final OpenAPI document array.
+     *
+     * @param array<string, mixed> $info
+     * @return array<string, mixed>
      */
     private function buildDocument(array $info): array
     {

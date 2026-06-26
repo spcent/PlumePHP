@@ -83,6 +83,9 @@ class PlumeHelper
     // HTTP
     // -----------------------------------------------------------------------
 
+    /**
+     * @param array<string, mixed> $postData
+     */
     public static function curlGetContents(
         string $url,
         array $postData = [],
@@ -120,7 +123,7 @@ class PlumeHelper
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
         unset($ch);
-        return $httpCode == 404 ? false : $result;
+        return $httpCode == 404 ? false : (is_string($result) ? $result : false);
     }
 
     public static function redirect(string $url, int $time = 0, string $msg = ''): never
@@ -205,6 +208,9 @@ class PlumeHelper
         return $str;
     }
 
+    /**
+     * @param string[] $trustedProxies
+     */
     public static function getClientIp(int $type = 0, array $trustedProxies = []): string|int
     {
         $type       = $type ? 1 : 0;
@@ -227,6 +233,9 @@ class PlumeHelper
         return $resolved[$type];
     }
 
+    /**
+     * @param array<string, mixed> $datas
+     */
     public static function signature(array $datas, string $key): string
     {
         ksort($datas);
@@ -289,7 +298,7 @@ class PlumeHelper
             $tmp     = $box[$a];
             $box[$a] = $box[$j];
             $box[$j] = $tmp;
-            $result .= chr(ord($string[$i]) ^ ($box[($box[$a] + $box[$j]) % 256]));
+            $result .= chr((int)(ord($string[$i]) ^ ($box[($box[$a] + $box[$j]) % 256])));
         }
         if ($operation == 'DECODE') {
             $expireTs = (int) substr($result, 0, 10);
@@ -307,6 +316,10 @@ class PlumeHelper
     // Data / String
     // -----------------------------------------------------------------------
 
+    /**
+     * @param array<mixed> $arr1
+     * @param array<mixed> $arr2
+     */
     public static function arrayMergeDeep(array &$arr1, array $arr2): void
     {
         foreach ($arr2 as $k => $v) {
@@ -360,7 +373,7 @@ class PlumeHelper
     {
         $string = '';
         for ($i = 0; $i < strlen($hex) - 1; $i += 2) {
-            $string .= chr(hexdec($hex[$i] . $hex[$i + 1]));
+            $string .= chr((int) hexdec($hex[$i] . $hex[$i + 1]));
         }
         return $string;
     }
@@ -403,6 +416,9 @@ class PlumeHelper
     // Export
     // -----------------------------------------------------------------------
 
+    /**
+     * @param array<mixed> $data
+     */
     public static function exportCsv(string $filename, array $data): never
     {
         header('Cache-Control: public');
@@ -413,6 +429,9 @@ class PlumeHelper
         header('Content-Type: application/download');
         header('Content-Type: application/force-download');
         $handle = fopen('php://output', 'w');
+        if ($handle === false) {
+            exit;
+        }
         foreach ($data as $v) {
             if (is_array($v)) {
                 fputcsv($handle, $v);
@@ -509,7 +528,8 @@ class PlumeHelper
         $length = count($trace);
         $result = [];
         for ($i = 0; $i < $length; $i++) {
-            $result[] = ($i + 1) . ')' . substr($trace[$i], strpos($trace[$i], ' '));
+            $pos = strpos($trace[$i], ' ');
+            $result[] = ($i + 1) . ')' . ($pos !== false ? substr($trace[$i], $pos) : $trace[$i]);
         }
         return "\t" . implode("\n\t", $result);
     }

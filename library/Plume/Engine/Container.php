@@ -68,6 +68,9 @@ class PlumeContainer implements \Psr\Container\ContainerInterface
                 if ($instance !== null) {
                     return $instance;
                 }
+                if (!class_exists($concrete) && !interface_exists($concrete) && !trait_exists($concrete)) {
+                    throw new PlumeContainerException("Class '{$concrete}' does not exist.");
+                }
                 $ref = new \ReflectionClass($concrete);
                 if ($ref->isAbstract() || $ref->isInterface()) {
                     throw new PlumeContainerException("Cannot instantiate abstract class or interface '{$concrete}'.");
@@ -110,6 +113,7 @@ interface PlumeMiddlewareInterface
  */
 class PlumeMiddlewarePipeline implements PlumeRequestHandlerInterface
 {
+    /** @var PlumeMiddlewareInterface[] */
     private array $middlewares = [];
     private ?PlumeRequestHandlerInterface $finalHandler = null;
 

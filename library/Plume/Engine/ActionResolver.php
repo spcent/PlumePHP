@@ -9,11 +9,11 @@ declare(strict_types=1);
 class ActionResolver
 {
     /**
-     * @param string     $requestUri Full REQUEST_URI (may include query string)
-     * @param string     $vdname     Virtual-directory prefix (config VDNAME)
-     * @param array|null $pathAlias  Path-alias map (config PATH_ALIAS)
+     * @param string                   $requestUri Full REQUEST_URI (may include query string)
+     * @param string                   $vdname     Virtual-directory prefix (config VDNAME)
+     * @param array<string, string>|null $pathAlias Path-alias map (config PATH_ALIAS)
      *
-     * @return array{urlPath: string, pathnames: string[], args: array<string,string>}
+     * @return array{urlPath: string, pathnames: string[], args: array<array-key, mixed>}
      */
     public static function parse(string $requestUri, string $vdname = '', ?array $pathAlias = null): array
     {
@@ -56,6 +56,9 @@ class ActionResolver
      * Extracts the module name from parsed path segments.
      * Falls back to $defaultModule when the first segment is empty or "index.php".
      */
+    /**
+     * @param string[] $pathnames
+     */
     public static function extractModule(array $pathnames, string $defaultModule = 'web'): string
     {
         $first = trim($pathnames[1] ?? '');
@@ -69,11 +72,11 @@ class ActionResolver
      * Collects leftover URL segments (after the action segment) as key→value pairs
      * and merges them into $baseArgs.
      *
-     * @param string[] $pathnames Full segment array
-     * @param int      $stopIndex Index of the matched action segment
-     * @param array    $baseArgs  Query-string args already parsed
+     * @param string[]             $pathnames Full segment array
+     * @param int                  $stopIndex Index of the matched action segment
+     * @param array<string, mixed> $baseArgs  Query-string args already parsed
      *
-     * @return array Merged args
+     * @return array<string, mixed> Merged args
      */
     public static function collectTailArgs(array $pathnames, int $stopIndex, array $baseArgs): array
     {

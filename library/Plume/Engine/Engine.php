@@ -24,26 +24,12 @@ declare(strict_types=1);
  */
 class PlumeEngine
 {
-    /**
-     * Stored variables.
-     *
-     * @var array
-     */
-    protected $vars;
+    /** @var array<string, mixed> Stored variables */
+    protected array $vars = [];
 
-    /**
-     * Class loader.
-     *
-     * @var PlumeLoader
-     */
-    protected $loader;
+    protected PlumeLoader $loader;
 
-    /**
-     * Event dispatcher.
-     *
-     * @var PlumeEvent
-     */
-    protected $dispatcher;
+    protected PlumeEvent $dispatcher;
 
     /** @var PlumeMiddlewareInterface[] */
     protected array $middlewares = [];
@@ -69,7 +55,10 @@ class PlumeEngine
      *
      * @return mixed Callback results
      */
-    public function __call(string $name, array $params)
+    /**
+     * @param mixed[] $params
+     */
+    public function __call(string $name, array $params): mixed
     {
         $callback = $this->dispatcher->get($name);
         if ($callback && is_callable($callback)) {
@@ -98,7 +87,7 @@ class PlumeEngine
     /**
      * Initializes the framework.
      */
-    public function init()
+    public function init(): void
     {
         static $initialized = false;
         $self = $this;
@@ -113,9 +102,9 @@ class PlumeEngine
         // Register default components
         $this->loader->register('request', 'PlumeRequest');
         $this->loader->register('response', 'PlumeResponse');
-        $this->loader->register('view', 'PlumeView', [], function ($view) use ($self) {
-            $view->path = $self->get('plumephp.views.path');
-            $view->extension = $self->get('plumephp.views.extension');
+        $this->loader->register('view', 'PlumeView', [], function (PlumeView $view) use ($self) {
+            $view->path = (string) ($self->get('plumephp.views.path') ?? '.');
+            $view->extension = (string) ($self->get('plumephp.views.extension') ?? '.tpl.php');
             $view->variableResolver = fn(string $k): mixed => $self->get($k);
         });
         $this->loader->register('router', 'PlumeRouter', [
@@ -195,11 +184,12 @@ class PlumeEngine
      *
      * @throws \ErrorException
      */
-    public function handleError($errno, $errstr, $errfile, $errline)
+    public function handleError(int $errno, string $errstr, string $errfile, int $errline): bool
     {
         if ($errno & error_reporting()) {
             throw new \ErrorException($errstr, $errno, 0, $errfile, $errline);
         }
+        return false;
     }
 
     /**
@@ -207,7 +197,7 @@ class PlumeEngine
      *
      * @param \Throwable $e Thrown exception
      */
-    public function handleException($e)
+    public function handleException(\Throwable $e): void
     {
         if ($this->get('plumephp.log_errors')) {
             error_log($e->getMessage());
@@ -223,7 +213,7 @@ class PlumeEngine
      *
      * @throws \Exception If trying to map over a framework method
      */
-    public function map(string $name, $callback)
+    public function map(string $name, callable $callback): void
     {
         if (method_exists($this, $name)) {
             throw new \Exception('Cannot override an existing framework method.');
@@ -241,7 +231,10 @@ class PlumeEngine
      *
      * @throws \Exception If trying to map over a framework method
      */
-    public function register(string $name, string $class, array $params = [], $callback = null)
+    /**
+     * @param array<mixed> $params
+     */
+    public function register(string $name, string $class, array $params = [], ?callable $callback = null): void
     {
         if (method_exists($this, $name)) {
             throw new \Exception('Cannot override an existing framework method.');
@@ -256,18 +249,12 @@ class PlumeEngine
      * @param string   $name     Method name
      * @param callable $callback Callback function
      */
-    public function before(string $name, $callback)
+    public function before(string $name, callable $callback): void
     {
         $this->dispatcher->hook($name, 'before', $callback);
     }
 
-    /**
-     * Adds a post-filter to a method.
-     *
-     * @param string   $name     Method name
-     * @param callable $callback Callback function
-     */
-    public function after(string $name, $callback)
+    public function after(string $name, callable $callback): void
     {
         $this->dispatcher->hook($name, 'after', $callback);
     }
@@ -294,14 +281,14 @@ class PlumeEngine
      * @param mixed $key   Key
      * @param mixed $value Value
      */
-    public function set($key, $value = null)
+    public function set(mixed $key, mixed $value = null): void
     {
         if (is_array($key) || is_object($key)) {
-            foreach ($key as $k => $v) {
-                $this->vars[$k] = $v;
+            foreach ((array) $key as $k => $v) {
+                $this->vars[(string) $k] = $v;
             }
         } else {
-            $this->vars[$key] = $value;
+            $this->vars[(string) $key] = $value;
         }
     }
 
@@ -336,7 +323,7 @@ class PlumeEngine
      *
      * @param string $dir Directory path
      */
-    public function path(string $dir)
+    public function path(string $dir): void
     {
         $this->loader->addDirectory($dir);
     }
@@ -380,7 +367,7 @@ class PlumeEngine
      *
      * @throws \Exception
      */
-    public function _start()
+    public function _start(): void
     {
         $self = $this;
 
@@ -395,7 +382,10 @@ class PlumeEngine
 
         // Flush any existing output
         if (ob_get_length() > 0) {
-            $response->write(ob_get_clean());
+            $ob = ob_get_clean();
+            if ($ob !== false) {
+                $response->write($ob);
+            }
         }
 
         // Enable output buffering
@@ -455,7 +445,7 @@ class PlumeEngine
      *
      * @throws \Exception
      */
-    public function _stop(?int $code = null)
+    public function _stop(?int $code = null): void
     {
         $response = $this->response();
         if (!$response->sent()) {
@@ -485,7 +475,7 @@ class PlumeEngine
      * @param callable $callback   Callback function
      * @param bool     $pass_route Pass the matching route object to the callback
      */
-    public function _route(string $pattern, callable $callback, bool $pass_route = false)
+    public function _route(string $pattern, callable $callback, bool $pass_route = false): void
     {
         $this->router()->map($pattern, $callback, $pass_route);
     }
@@ -496,6 +486,9 @@ class PlumeEngine
      * @param string   $prefix      URL prefix for all routes in the group
      * @param callable $callback    Closure that receives the engine; registers routes via PlumePHP::route()
      * @param array    $middlewares PSR-15 middleware class names applied to every route in the group
+     */
+    /**
+     * @param array<mixed> $middlewares
      */
     public function group(string $prefix, callable $callback, array $middlewares = []): void
     {
@@ -511,7 +504,7 @@ class PlumeEngine
      * @param string $message Response message
      * @return never
      */
-    public function _halt(int $code = 200, string $message = '')
+    public function _halt(int $code = 200, string $message = ''): never
     {
         if (IS_CLI) {
             echo '➤ ', date('H:i:s'), ', Msg:'.$message, PHP_EOL;
@@ -531,7 +524,7 @@ class PlumeEngine
      *
      * @param \Exception|\Throwable $e Thrown exception
      */
-    public function _error($e)
+    public function _error(\Throwable $e): void
     {
         $this->_log('Msg: '.$e->getMessage().
             ', Code: '.$e->getCode().
@@ -573,7 +566,7 @@ class PlumeEngine
     /**
      * Sends an HTTP 404 response when a URL is not found.
      */
-    public function _notFound()
+    public function _notFound(): void
     {
         $this->response()
             ->clear()
@@ -593,6 +586,9 @@ class PlumeEngine
      * @param string $layout layout file
      *
      * @throws \Exception
+     */
+    /**
+     * @param array<string, mixed>|null $data
      */
     public function _render(string $file, ?array $data = null, ?string $key = null, string $layout = ''): void
     {
@@ -615,13 +611,20 @@ class PlumeEngine
      * @throws \Exception
      */
     public function _json(
-        $data,
+        mixed $data,
         int $code = 200,
         bool $encode = true,
         string $charset = 'utf-8',
         int $option = JSON_UNESCAPED_UNICODE
-    ) {
-        $json = ($encode) ? json_encode($data, $option) : $data;
+    ): void {
+        if ($encode) {
+            $json = json_encode($data, $option);
+            if ($json === false) {
+                $json = '{}';
+            }
+        } else {
+            $json = (string) $data;
+        }
         $this->response()
             ->status($code)
             ->header('Content-Type', 'application/json; charset='.$charset)
@@ -642,14 +645,21 @@ class PlumeEngine
      * @throws \Exception
      */
     public function _jsonp(
-        $data,
+        mixed $data,
         string $param = 'jsonp',
         int $code = 200,
         bool $encode = true,
         string $charset = 'utf-8',
         int $option = JSON_UNESCAPED_UNICODE
-    ) {
-        $json = ($encode) ? json_encode($data, $option) : $data;
+    ): void {
+        if ($encode) {
+            $json = json_encode($data, $option);
+            if ($json === false) {
+                $json = '{}';
+            }
+        } else {
+            $json = (string) $data;
+        }
         $callback = $this->request()->query[$param] ?? '';
         if (!preg_match('/^[\w.]{1,64}$/', $callback)) {
             $this->response()->status(400)->write('Invalid callback parameter')->send();
@@ -667,7 +677,10 @@ class PlumeEngine
      *
      * @return mixed
      */
-    public function _biz(array $params = [])
+    /**
+     * @param array<mixed> $params
+     */
+    public function _biz(array $params = []): mixed
     {
         $startTime = microtime(true);
         $ar = new PlumeParam($params);
@@ -678,7 +691,7 @@ class PlumeEngine
         }
 
         // Special character processing
-        $bizPath = str_replace('..', '', $bizPathRaw);
+        $bizPath = str_replace('..', '', (string) $bizPathRaw);
         $bizPath = str_replace('/', '', $bizPath);
         $bizPath = str_replace('\\', '', $bizPath);
         $names = explode('.', $bizPath, 20);
@@ -690,13 +703,13 @@ class PlumeEngine
         // The first is the module name
         $module = $names[0];
         if (!file_exists(APP_PATH.DS.$module)) {
-            $module = PlumePHP::get('plumephp.default.module');
+            $module = (string) PlumePHP::get('plumephp.default.module');
         } else {
-            $module = array_shift($names);
+            $module = (string) array_shift($names);
         }
 
         // The last one is the function that needs to be called
-        $func = array_pop($names);
+        $func = (string) array_pop($names);
         // Class file uses the .biz.php suffix
         $bizFile = $module.DS.'biz'.DS.implode(DS, $names).'.biz.php';
         $classFile = APP_PATH.DS.$bizFile;
@@ -718,7 +731,7 @@ class PlumeEngine
 
         L('[biz]class: '.$className.'::'.$func.' call start');
         $res = $this->dispatcher->run('rpc', [$ar]);
-        $result = json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        $result = (string) json_encode($res, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         L('[biz]class: '.$className.'::'.$func.' call success, cost time: '
                         .round(microtime(true) - $startTime, 3).'s'
                         .', result: '.substr($result, 0, 3000));
@@ -736,7 +749,10 @@ class PlumeEngine
      * @param string $level   Log level, the default is DEBUG
      * @param bool   $wf      The default is false to log in a separate wf log
      */
-    public function _log(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false)
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function _log(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false): void
     {
         $this->logger()->write($msg, $context, $level, $wf);
     }
@@ -748,7 +764,7 @@ class PlumeEngine
      * Delegates to ActionResolver (URL parsing), ActionLocator (filesystem),
      * ActionNaming (class name), and ActionInvoker (instantiation + run).
      */
-    public function runAction()
+    public function runAction(): mixed
     {
         $startTime  = microtime(true);
         $requestUri = $_SERVER['REQUEST_URI'];
@@ -764,7 +780,7 @@ class PlumeEngine
         $args      = $parsed['args'];
         $urlPath   = $parsed['urlPath'];
 
-        $defaultModule = $this->get('plumephp.default.module') ?? 'web';
+        $defaultModule = (string) ($this->get('plumephp.default.module') ?? 'web');
         $module        = ActionResolver::extractModule($pathnames, $defaultModule);
         $module        = trim($module);
 
@@ -809,8 +825,8 @@ class PlumeEngine
 
         L('[web]class name:{class}, args:{args}, request:{req}', [
             'class' => $className,
-            'args'  => json_encode($args, JSON_UNESCAPED_UNICODE),
-            'req'   => json_encode(ActionInvoker::sanitizeForLog($_REQUEST), JSON_UNESCAPED_UNICODE),
+            'args'  => (string) json_encode($args, JSON_UNESCAPED_UNICODE),
+            'req'   => (string) json_encode(ActionInvoker::sanitizeForLog($_REQUEST), JSON_UNESCAPED_UNICODE),
         ]);
 
         // 6. Instantiate and run
@@ -822,7 +838,7 @@ class PlumeEngine
 
         L('[web]class name: {class} success, result: {result}, cost: {cost}s', [
             'class'  => $className,
-            'result' => substr(json_encode($res, JSON_UNESCAPED_UNICODE), 0, 200),
+            'result' => substr((string) json_encode($res, JSON_UNESCAPED_UNICODE), 0, 200),
             'cost'   => round(microtime(true) - $startTime, 3),
         ]);
 
@@ -832,7 +848,7 @@ class PlumeEngine
     /**
      * boot.
      */
-    protected function boot()
+    protected function boot(): void
     {
         // Load .env file if it exists, or use defaults for testing/CI environments
         $envFile = PLUME_PHP_PATH.DS.'.env';
@@ -918,10 +934,7 @@ class PlumeEngine
         // runs per-request in persistent worker processes (see resetForWorker).
 
         // Sets timezone
-        $timezone = C('TIME_ZONE');
-        if (empty($timezone)) {
-            $timezone = 'Asia/Shanghai';
-        }
+        $timezone = (string) (C('TIME_ZONE') ?: 'Asia/Shanghai');
         date_default_timezone_set($timezone);
 
         // Loads common functions

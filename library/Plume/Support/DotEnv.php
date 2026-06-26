@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 class PlumeDotEnv
 {
+    /**
+     * @return array<string, mixed>
+     */
     public static function parse(string $filePath): array
     {
         if (!is_readable($filePath)) {
             return [];
         }
         $result = [];
-        foreach (file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $lines = file($filePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines ?: [] as $line) {
             $line = trim($line);
             if ($line === '' || $line[0] === '#') {
                 continue;

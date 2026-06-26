@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 class PlumeRoute
 {
-    /** @var array Route parameters populated during matchUrl() */
+    /** @var array<string, string|null> Route parameters populated during matchUrl() */
     public array $params = [];
 
     /** @var string Matching regular expression populated during matchUrl() */
@@ -16,13 +16,13 @@ class PlumeRoute
     /** Pre-compiled regex pattern (populated by compile() or setCompiled()). */
     private string $compiledRegex = '';
 
-    /** Named parameter keys collected during regex compilation. */
+    /** @var array<string, null> Named parameter keys collected during regex compilation. */
     private array $compiledIds = [];
 
     /**
      * @param string   $pattern  URL pattern
      * @param mixed    $callback Callback function (callable, not typed as property type)
-     * @param array    $methods  HTTP methods
+     * @param string[] $methods  HTTP methods
      * @param bool     $pass     Pass self in callback parameters
      */
     public function __construct(
@@ -36,6 +36,7 @@ class PlumeRoute
      * Pre-compiles the route pattern to a regex and stores it.
      * Returns [regex, namedParamKeys] for caching.
      */
+    /** @return array{0: string, 1: array<string, null>} */
     public function compile(): array
     {
         if ($this->compiledRegex !== '') {
@@ -62,6 +63,9 @@ class PlumeRoute
 
     /**
      * Loads a pre-compiled regex from the route cache.
+     */
+    /**
+     * @param array<string, null> $ids
      */
     public function setCompiled(string $regex, array $ids): void
     {

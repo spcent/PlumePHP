@@ -87,7 +87,7 @@ class PlumeRequest
     /**
      * Constructor.
      *
-     * @param array $config Request configuration
+     * @param array<string, mixed> $config Request configuration
      */
     public function __construct(array $config = [])
     {
@@ -119,9 +119,9 @@ class PlumeRequest
     /**
      * Initialize request properties.
      *
-     * @param array $properties Array of request properties
+     * @param array<string, mixed> $properties Array of request properties
      */
-    public function init(array $properties = [])
+    public function init(array $properties = []): void
     {
         // Set all the defined properties
         foreach ($properties as $name => $value) {
@@ -207,7 +207,7 @@ class PlumeRequest
      *
      * @param string $url URL string
      *
-     * @return array Query parameters
+     * @return array<array-key, mixed> Query parameters
      */
     public static function parseQuery(string $url): array
     {

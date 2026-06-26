@@ -6,11 +6,11 @@ declare(strict_types=1);
 class PlumeSchema implements \JsonSerializable
 {
     /**
-     * Array or ArrayObject that gets filled with
-     * data from $json or PlumeParam
-     * @var array
+     * Array that gets filled with data from $json or PlumeParam.
+     *
+     * @var string[]
      */
-    protected $filledFields;
+    protected array $filledFields = [];
 
     public function __construct(?PlumeParam $param = null)
     {
@@ -24,7 +24,7 @@ class PlumeSchema implements \JsonSerializable
     /**
      * Create schema from the PlumeParam.
      */
-    public static function createFromPlumeParam(PlumeParam $param)
+    public static function createFromPlumeParam(PlumeParam $param): static
     {
         return new static($param);
     }

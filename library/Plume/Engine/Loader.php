@@ -7,23 +7,23 @@ class PlumeLoader
     /**
      * Registered classes.
      *
-     * @var array
+     * @var array<string, array{0: callable|string, 1: array<mixed>, 2: callable|null}>
      */
-    protected $classes = [];
+    protected array $classes = [];
 
     /**
      * Class instances.
      *
-     * @var array
+     * @var array<string, mixed>
      */
-    protected $instances = [];
+    protected array $instances = [];
 
     /**
      * Autoload directories.
      *
-     * @var array
+     * @var string[]
      */
-    protected static $dirs = [];
+    protected static array $dirs = [];
 
     public function __construct()
     {
@@ -46,7 +46,10 @@ class PlumeLoader
      * @param array           $params   Class initialization parameters
      * @param callable|null   $callback Function to call after object instantiation
      */
-    public function register(string $name, $class, array $params = [], ?callable $callback = null)
+    /**
+     * @param array<mixed> $params
+     */
+    public function register(string $name, mixed $class, array $params = [], ?callable $callback = null): void
     {
         unset($this->instances[$name]);
         $this->classes[$name] = [$class, $params, $callback];
@@ -57,7 +60,7 @@ class PlumeLoader
      *
      * @param string $name Registry name
      */
-    public function unregister(string $name)
+    public function unregister(string $name): void
     {
         unset($this->classes[$name]);
     }
@@ -70,13 +73,13 @@ class PlumeLoader
      *
      * @throws \Exception
      *
-     * @return object Class instance
+     * @return mixed Class instance or null
      */
-    public function load(string $name, bool $shared = true)
+    public function load(string $name, bool $shared = true): mixed
     {
         $obj = null;
         if (isset($this->classes[$name])) {
-            list($class, $params, $callback) = $this->classes[$name];
+            [$class, $params, $callback] = $this->classes[$name];
             $exists = isset($this->instances[$name]);
             if ($shared) {
                 $obj = ($exists) ? $this->getInstance($name) : $this->newInstance($class, $params);
@@ -101,9 +104,9 @@ class PlumeLoader
      *
      * @param string $name Instance name
      *
-     * @return object Class instance
+     * @return mixed Class instance or null
      */
-    public function getInstance(string $name)
+    public function getInstance(string $name): mixed
     {
         return isset($this->instances[$name]) ? $this->instances[$name] : null;
     }
@@ -111,14 +114,14 @@ class PlumeLoader
     /**
      * Gets a new instance of a class.
      *
-     * @param callable|string $class  Class name or callback function to instantiate class
-     * @param array           $params Class initialization parameters
+     * @param mixed        $class  Class name or callback function to instantiate class
+     * @param array<mixed> $params Class initialization parameters
      *
      * @throws \Exception
      *
-     * @return object Class instance
+     * @return mixed Class instance
      */
-    public function newInstance($class, array $params = [])
+    public function newInstance(mixed $class, array $params = []): mixed
     {
         if (is_callable($class)) {
             return call_user_func_array($class, $params);
@@ -132,7 +135,7 @@ class PlumeLoader
      *
      * @return mixed Class information or null if not registered
      */
-    public function get(string $name)
+    public function get(string $name): mixed
     {
         return isset($this->classes[$name]) ? $this->classes[$name] : null;
     }
@@ -142,7 +145,7 @@ class PlumeLoader
      * Note: static $dirs is intentionally NOT reset — autoload paths are process-global
      * and shared across all engine instances (including worker-mode resets).
      */
-    public function reset()
+    public function reset(): void
     {
         $this->classes = [];
         $this->instances = [];
@@ -154,9 +157,9 @@ class PlumeLoader
      * Starts/stops autoloader.
      *
      * @param bool  $enabled Enable/disable autoloading
-     * @param array $dirs    Autoload directories
+     * @param mixed $dirs    Autoload directories
      */
-    public static function autoload(bool $enabled = true, $dirs = [])
+    public static function autoload(bool $enabled = true, mixed $dirs = []): void
     {
         if (!$enabled) {
             spl_autoload_unregister([__CLASS__, 'loadClass']);
@@ -175,7 +178,7 @@ class PlumeLoader
      *
      * @param string $class Class name
      */
-    public static function loadClass(string $class)
+    public static function loadClass(string $class): void
     {
         $classFile = str_replace(['\\', '_'], '/', $class).'.php';
         foreach (self::$dirs as $dir) {
@@ -193,9 +196,9 @@ class PlumeLoader
      *
      * @param mixed $dir Directory path
      */
-    public static function addDirectory($dir)
+    public static function addDirectory(mixed $dir): void
     {
-        if (is_array($dir) || is_object($dir)) {
+        if (is_iterable($dir)) {
             foreach ($dir as $value) {
                 self::addDirectory($value);
             }
