@@ -4,10 +4,10 @@
 
 ```bash
 # Run all tests
-phpunit tests/
+./vendor/bin/phpunit tests/
 
 # Run a single test file
-phpunit tests/RouterTest.php
+./vendor/bin/phpunit tests/RouterTest.php
 
 # Start dev server
 php -S localhost:8000 -t public/
@@ -17,33 +17,64 @@ php public/index.php -m {module} -c {cmd} [options]
 
 # Install dependencies
 composer install
+
+# Build single-file dist artifact
+composer build
 ```
 
-> PHPUnit is not in `composer.json`; install globally: `composer global require phpunit/phpunit`. Tests extend the legacy `PHPUnit_Framework_TestCase`.
+> PHPUnit `^10.5` is in `require-dev`. Tests extend `PHPUnit\Framework\TestCase`. Run static analysis with `./vendor/bin/phpstan analyse`.
 
 ---
 
 ## Architecture
 
-### Core file
+### Source layout
 
-All 14 framework classes live in **`library/PlumePHP.php`** (~4300 lines). No build step — included directly.
+`library/PlumePHP.php` (~346 lines) is the bootstrap entry point: it defines global functions (`C`, `I`, `L`, `T`, `E`) and `require_once`s all framework class files in dependency order. Framework classes live in `library/Plume/` (PSR-4 namespace `Plume\`).
 
 ```
-PlumePHP            Static facade; all public API calls forwarded here via __callStatic
-  └─ PlumeEngine    Singleton app instance: DI container + request dispatcher
-       ├─ PlumeRouter       URL pattern matching (declaration order, first match wins)
-       ├─ PlumeRequest      HTTP request wrapper (query, POST, headers, cookies, files)
-       ├─ PlumeResponse     HTTP response builder (headers, status, JSON, redirect, ETag)
-       ├─ PlumeView         Native-PHP template rendering with layouts
-       ├─ PlumeEvent        Before/after filter chains on any method
-       ├─ PlumeLoader       Class autoloader + lazy service registry
-       ├─ PlumeCollection   ArrayAccess/Iterator/Countable superglobal wrapper
-       ├─ PlumeParam        GET+POST+JSON merged param container with auto-sanitize
-       ├─ PlumeLogger       File-based logging split by level/type
-       ├─ PlumeSchema       Base class for JSON-serializable data models
-       ├─ PlumeJsonMapper   JSON-to-typed-object mapper with namespace resolution
-       └─ PlumeCmdService   CLI argv parser + command runner
+library/
+  PlumePHP.php          Bootstrap facade + global functions
+  PlumeHelper.php       Static utility class
+  common.php            Global function aliases → PlumeHelper
+  Plume/
+    Engine/             Core classes
+    Http/               HTTP layer
+    Support/            Services & utilities
+  core/Plume/Libs/      Bundled third-party libraries
+```
+
+A single-file distribution is generated at `dist/Plume.php` via `composer build`.
+
+### Class map
+
+```
+PlumePHP                  Static facade; all public API calls forwarded via __callStatic
+  └─ PlumeEngine          Singleton app instance: DI container + request dispatcher
+       ├─ PlumeRouter         URL pattern matching (declaration order, first match wins)
+       ├─ PlumeRoute          Individual route representation
+       ├─ PlumeRequest        HTTP request wrapper (query, POST, headers, cookies, files)
+       ├─ PlumeResponse       HTTP response builder (headers, status, JSON, redirect, ETag)
+       ├─ PlumeView           Native-PHP template rendering with layouts
+       ├─ PlumeEvent          Before/after filter chains on any method
+       ├─ PlumeLoader         Class autoloader + lazy service registry
+       ├─ PlumeCollection     ArrayAccess/Iterator/Countable superglobal wrapper
+       ├─ PlumeParam          GET+POST+JSON merged param container with auto-sanitize
+       ├─ PlumeLogger         PSR-3 LoggerInterface, file-based logging by level/type
+       ├─ PlumeLogHandlers    Structured log handler system
+       ├─ PlumeSchema         Base class for JSON-serializable data models
+       ├─ PlumeJsonMapper     JSON-to-typed-object mapper with namespace resolution
+       ├─ PlumeCmdService     CLI argv parser + command runner
+       ├─ PlumeDotEnv         .env file parser
+       ├─ PlumeDocGenerator   API documentation generator
+       ├─ PlumeHelper         Static utility methods (JSON, cURL, redirects)
+       ├─ PlumeContainer      PSR-11 DI container
+       ├─ PlumeMiddlewarePipeline  Middleware execution pipeline
+       ├─ ActionNaming        URL path → class name converter
+       ├─ ActionLocator       Finds action files on disk
+       ├─ ActionResolver      Resolves actions from routes
+       ├─ ActionInvoker       Executes action methods
+       └─ ActionException     Custom exception for action errors
 ```
 
 `PlumePHP::app()` returns the `PlumeEngine` singleton.
@@ -55,11 +86,12 @@ PlumePHP            Static facade; all public API calls forwarded here via __cal
 | `PLUME_VERSION` | `'1.3.1'` |
 | `DS` | `DIRECTORY_SEPARATOR` |
 | `PLUME_PHP_PATH` | Path to `library/` |
+| `VENDOR_PATH` | Path to `library/vendor/` |
 | `APP_PATH` | Path to `application/` |
 | `CONFIG_PATH` | Path to `config/` |
 | `PUBLIC_PATH` | Path to `public/` |
 | `LOG_PATH` | Path to log directory |
-| `IS_CLI` | `true` if running from CLI |
+| `IS_CLI` | `1` if running from CLI |
 | `SITE_DOMAIN` | Current origin (web only) |
 | `IS_GET` / `IS_POST` / `IS_AJAX` | Request type booleans (web only) |
 
@@ -94,6 +126,18 @@ PlumePHP::after('start',  function(&$params, &$output) { ... });
      _or_ `application/{module}/actions/{controller}.action.php` (flat layout)
    - Instantiates `{module}_{controller}_action`, calls `execute()` → `run()` → `invoke()`
 5. `PlumePHP::stop($code)` flushes buffered response
+
+### Worker mode (FrankenPHP / RoadRunner)
+
+`public/worker.php` is the persistent worker entry point. Call `PlumePHP::resetForWorker()` between requests to reset per-request state (router, loader instances, dispatcher filters, engine vars) while preserving boot-time config and timezone.
+
+```php
+while (frankenphp_handle_request(function () {
+    PlumePHP::resetForWorker();
+    PlumePHP::route('*', fn() => PlumePHP::app()->runAction());
+    PlumePHP::start();
+}));
+```
 
 ---
 
@@ -137,7 +181,7 @@ class web_home_action extends web_base_action {
 }
 ```
 
-### Action helper methods (`\Plume\Libs\Action`)
+### Action helper methods (`library/core/Plume/Libs/Action.php`)
 
 | Method | Purpose |
 |---|---|
@@ -176,11 +220,16 @@ php public/index.php --module web --cmd install --dry
 PlumePHP::route('/path', $callback);
 PlumePHP::route('GET /search', $callback);
 PlumePHP::route('GET|POST /form', $callback);
-PlumePHP::route('/user/@id', function($id) { ... });          // named param
-PlumePHP::route('/post/@slug:[a-z-]+', function($slug) { }); // with regex
+PlumePHP::route('/user/@id', function($id) { ... });           // named param
+PlumePHP::route('/post/@slug:[a-z-]+', function($slug) { });   // with regex
 PlumePHP::route('/blog(/@year(/@month))', function($y, $m) { }); // optional
-PlumePHP::route('/files/*', function($splat) { });            // wildcard
-PlumePHP::route('*', function() { });                          // catch-all
+PlumePHP::route('/files/*', function($splat) { });             // wildcard
+PlumePHP::route('*', function() { });                           // catch-all
+
+// Route groups with shared prefix and optional middleware
+PlumePHP::group('/api', function() {
+    PlumePHP::route('/users', $callback);
+}, [$middleware]);
 ```
 
 - First match wins; returning `true` from a handler continues to next match
@@ -191,7 +240,7 @@ PlumePHP::route('*', function() { });                          // catch-all
 
 ## Configuration
 
-`config/config.php` returns a plain array. Environment-specific overrides go in `config/{env}.php` (selected via `PLUME_PHP_ENV`).
+`config/config.php` returns a plain array. Environment-specific overrides go in `config/{env}.php` (selected via `PLUME_PHP_ENV`). `.env` files are supported via `PlumeDotEnv`.
 
 ```php
 // Get
@@ -222,7 +271,7 @@ PlumePHP::set('plumephp.base_url', 'https://example.com');
 
 ## Logging
 
-Logs written to `storage/log/` (or `PLUME_LOG_PATH`):
+Logs written to `storage/log/` (or `LOG_PATH`). `PlumeLogger` implements PSR-3 `LoggerInterface`.
 
 | File | Levels |
 |---|---|
@@ -241,7 +290,9 @@ Log format: `[YYYY-MM-DD HH:MM:SS][{log_id}][LEVEL]message\tcontext_json`
 
 ---
 
-## Helper Functions (`library/common.php`)
+## Helper Functions (`library/common.php` → `PlumeHelper`)
+
+Global functions in `common.php` delegate to `PlumeHelper` static methods, enabling both procedural and OOP styles.
 
 | Function | Purpose |
 |---|---|
