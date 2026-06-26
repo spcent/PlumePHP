@@ -52,5 +52,5 @@ jobs:
         run: composer install --prefer-dist --no-interaction --no-progress
 
       - name: Run PHPStan
-        run: vendor/bin/phpstan analyse --level=5 library/
+        run: vendor/bin/phpstan analyse --configuration phpstan.neon
         continue-on-error: true
