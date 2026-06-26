@@ -9,6 +9,24 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
     /** @var array<callable(string $level, string $message, array $context): void> */
     private array $handlers = [];
 
+    /**
+     * Output format: 'text' (default) or 'json'.
+     * JSON format: {"time":"...","log_id":"...","level":"...","msg":"...","ctx":{...}}
+     */
+    private string $formatter = 'text';
+
+    /**
+     * Write mode: 'normal' (default) or 'batch'.
+     * In batch mode ALL log entries (including wf-level errors) are buffered in
+     * memory and flushed together at save() time — useful in Worker processes
+     * where disk I/O per-request adds up.  NOTICE and fatal-class levels
+     * ($wf=true) still receive their own flush at the end of each request.
+     */
+    private string $mode = 'normal';
+
+    /** Buffered wf entries when mode=batch */
+    private array $wfLog = [];
+
     public function __construct(
         protected string $logId = '',
         protected string $logPath = ''
@@ -32,6 +50,28 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
     }
 
     /**
+     * Set output format.
+     *
+     * @param string $format 'text' or 'json'
+     */
+    public function setFormatter(string $format): self
+    {
+        $this->formatter = in_array($format, ['text', 'json'], true) ? $format : 'text';
+        return $this;
+    }
+
+    /**
+     * Set write mode.
+     *
+     * @param string $mode 'normal' or 'batch'
+     */
+    public function setMode(string $mode): self
+    {
+        $this->mode = in_array($mode, ['normal', 'batch'], true) ? $mode : 'normal';
+        return $this;
+    }
+
+    /**
      * Register an external log handler called after every write.
      * Signature: function(string $level, string $message, array $context): void
      */
@@ -42,7 +82,24 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
     }
 
     /**
-     * Write log, sae support.
+     * Format a log entry based on the configured formatter.
+     */
+    private function formatEntry(string $msg, string $level, array $context = []): string
+    {
+        if ($this->formatter === 'json') {
+            return json_encode([
+                'time'   => date('Y-m-d H:i:s'),
+                'log_id' => $this->logId,
+                'level'  => $level,
+                'msg'    => $msg,
+                'ctx'    => $context ?: new \stdClass(),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+        }
+        return date('[Y-m-d H:i:s]') . '[' . $this->logId . ']' . "[{$level}]" . $msg . PHP_EOL;
+    }
+
+    /**
+     * Write log.
      *
      * @param string $msg     log message
      * @param array  $context Replaces the placeholder in the record information
@@ -61,11 +118,8 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
             // Builds a replacement array of key names contained in curly braces
             $replace = [];
             foreach ($context as $key => $val) {
-                $replace['{'.$key.'}'] = $val;
+                $replace['{' . $key . '}'] = $val;
             }
-
-            // Replace the placeholder in the record information and finally
-            // return the modified record information.
             $msg = strtr($msg, $replace);
         }
 
@@ -73,19 +127,26 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
             $this->logId = sprintf('%x', ((int) (microtime(true) * 10000) % 864000000) * 10000 + random_int(0, 9999));
         }
 
-        $log_message = date('[Y-m-d H:i:s]').'['.$this->logId.']'."[{$level}]".$msg.PHP_EOL;
-        $upperLevel  = strtoupper($level);
+        $logMessage = $this->formatEntry($msg, $level, $context);
+        $upperLevel = strtoupper($level);
 
         if ($upperLevel === 'SQL') {
-            file_put_contents($this->logPath.DS.date('Ymd').'.log.sql', $log_message, FILE_APPEND | LOCK_EX);
+            file_put_contents($this->logPath . DS . date('Ymd') . '.log.sql', $logMessage, FILE_APPEND | LOCK_EX);
         } elseif ($upperLevel === 'NOTICE') {
-            // NOTICE goes to both the buffered .log and the immediate .log.wf
-            $this->log[] = $log_message;
-            file_put_contents($this->logPath.DS.date('Ymd').'.log.wf', $log_message, FILE_APPEND | LOCK_EX);
+            $this->log[] = $logMessage;
+            if ($this->mode === 'batch') {
+                $this->wfLog[] = $logMessage;
+            } else {
+                file_put_contents($this->logPath . DS . date('Ymd') . '.log.wf', $logMessage, FILE_APPEND | LOCK_EX);
+            }
         } elseif ($wf) {
-            file_put_contents($this->logPath.DS.date('Ymd').'.log.wf', $log_message, FILE_APPEND | LOCK_EX);
+            if ($this->mode === 'batch') {
+                $this->wfLog[] = $logMessage;
+            } else {
+                file_put_contents($this->logPath . DS . date('Ymd') . '.log.wf', $logMessage, FILE_APPEND | LOCK_EX);
+            }
         } else {
-            $this->log[] = $log_message;
+            $this->log[] = $logMessage;
         }
 
         foreach ($this->handlers as $handler) {
@@ -94,23 +155,27 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
     }
 
     /**
-     * Save logs.
-     *
-     * @static
-     *
-     * @return void
+     * Flush all buffered log entries to disk.
      */
-    public function save()
+    public function save(): void
     {
-        if (empty($this->log)) {
-            return;
+        if (!empty($this->log)) {
+            file_put_contents(
+                $this->logPath . DS . date('Ymd') . '.log',
+                implode('', $this->log),
+                FILE_APPEND | LOCK_EX
+            );
+            $this->log = [];
         }
 
-        $msg = implode('', $this->log);
-        $logPath = $this->logPath.DS.date('Ymd').'.log';
-        file_put_contents($logPath, $msg, FILE_APPEND | LOCK_EX);
-        // Clear the logs
-        $this->log = [];
+        if (!empty($this->wfLog)) {
+            file_put_contents(
+                $this->logPath . DS . date('Ymd') . '.log.wf',
+                implode('', $this->wfLog),
+                FILE_APPEND | LOCK_EX
+            );
+            $this->wfLog = [];
+        }
     }
 
     /**

@@ -43,16 +43,21 @@ function C($key, $value = null)
 {
     static $_config = [];
     static $_snapshot = null;
+    // Read-path cache: stores resolved values for dot-notation string keys.
+    // Invalidated on any write so stale data is never served.
+    static $_readCache = [];
 
     // Internal snapshot operations for worker-mode config isolation.
     // Using null-byte sentinel values to avoid collision with real config keys.
     if ($key === "\x00snapshot_take\x00") {
-        $_snapshot = $_config;
+        $_snapshot  = $_config;
+        $_readCache = [];
         return null;
     }
     if ($key === "\x00snapshot_restore\x00") {
         if ($_snapshot !== null) {
-            $_config = $_snapshot;
+            $_config    = $_snapshot;
+            $_readCache = [];
         }
         return null;
     }
@@ -60,42 +65,50 @@ function C($key, $value = null)
     $args = func_num_args();
     if (1 === $args) {
         if (is_string($key)) {
-            // Up to three layers
-            $names = explode('.', $key, 3);
+            // Serve from read cache when available (hot path in Worker mode)
+            if (isset($_readCache[$key])) {
+                return $_readCache[$key];
+            }
+
+            // Up to three layers of dot-notation
+            $names      = explode('.', $key, 3);
             $countNames = count($names);
             if (1 === $countNames) {
-                return isset($_config[$key]) ? $_config[$key] : null;
+                $result = $_config[$key] ?? null;
+            } elseif (2 === $countNames) {
+                $result = $_config[$names[0]][$names[1]] ?? null;
+            } else {
+                $result = $_config[$names[0]][$names[1]][$names[2]] ?? null;
             }
-            if (2 === $countNames) {
-                $key1 = $names[0];
-                $key2 = $names[1];
 
-                return isset($_config[$key1][$key2])
-                    ? $_config[$key1][$key2] : null;
-            }
-            $key1 = $names[0];
-            $key2 = $names[1];
-            $key3 = $names[2];
-
-            return isset($_config[$key1][$key2][$key3])
-                ? $_config[$key1][$key2][$key3] : null;
+            $_readCache[$key] = $result;
+            return $result;
         }
 
         if (is_array($key)) {
             if (array_keys($key) !== range(0, count($key) - 1)) {
-                $_config = array_merge($_config, $key);
+                // Associative array → bulk write; invalidate cache
+                $_config    = array_merge($_config, $key);
+                $_readCache = [];
             } else {
+                // Numeric-indexed array → bulk read (not cached individually)
                 $ret = [];
                 foreach ($key as $k) {
-                    $ret[$k] = isset($_config[$k]) ? $_config[$k] : null;
+                    $ret[$k] = $_config[$k] ?? null;
                 }
-
                 return $ret;
             }
         }
     } else {
         if (is_string($key)) {
             $_config[$key] = $value;
+            // Invalidate any cached entry that starts with this key
+            // (covers both the exact key and parent dot-paths)
+            foreach (array_keys($_readCache) as $ck) {
+                if ($ck === $key || str_starts_with($ck, $key . '.')) {
+                    unset($_readCache[$ck]);
+                }
+            }
         }
     }
 
@@ -107,7 +120,7 @@ function C($key, $value = null)
  * @param string $path file path
  * @param bool   $once Whether to use include_once, the default is false
  *
- * @return
+ * @return void
  */
 function I(string $path, bool $once = false)
 {
@@ -186,10 +199,17 @@ require_once __DIR__ . '/Plume/Engine/Container.php';
 require_once __DIR__ . '/Plume/Engine/Event.php';
 require_once __DIR__ . '/Plume/Support/Param.php';
 require_once __DIR__ . '/Plume/Support/Logger.php';
+require_once __DIR__ . '/Plume/Support/LogHandlers.php';
 require_once __DIR__ . '/Plume/Support/Schema.php';
 require_once __DIR__ . '/Plume/Support/JsonMapper.php';
+require_once __DIR__ . '/Plume/Engine/ActionException.php';
+require_once __DIR__ . '/Plume/Engine/ActionResolver.php';
+require_once __DIR__ . '/Plume/Engine/ActionLocator.php';
+require_once __DIR__ . '/Plume/Engine/ActionNaming.php';
+require_once __DIR__ . '/Plume/Engine/ActionInvoker.php';
 require_once __DIR__ . '/Plume/Engine/Engine.php';
 require_once __DIR__ . '/Plume/Support/CmdService.php';
+require_once __DIR__ . '/Plume/Support/DocGenerator.php';
 require_once __DIR__ . '/PlumeHelper.php';
 
 /**
@@ -197,27 +217,32 @@ require_once __DIR__ . '/PlumeHelper.php';
  *
  * Core.
  *
- * @method static app()                                                             Gets the application object instance
- * @method static start()                                                           Starts the framework.
- * @method static path($path)                                                       Adds a path for autoloading classes.
- * @method static stop()                                                            Stops the framework and sends a response.
- * @method static halt($code = 200, $message = '')                                  Stop the framework with an optional status code and message.
- * @method static route($pattern, $callback)                                        Maps a URL pattern to a callback.
- * @method static group($prefix, $callback, $middlewares = [])                      Groups routes under a common prefix with optional middleware.
- * @method static render($file, [$data], [$key], [$layout])                         Renders a template file.
- * @method static error($exception)                                                 Sends an HTTP 500 response.
- * @method static notFound()                                                        Sends an HTTP 404 response.
- * @method static json($data, [$code], [$encode], [$charset], [$option])            Sends a JSON response.
- * @method static jsonp($data, [$param], [$code], [$encode], [$charset], [$option]) Sends a JSONP response.
- * @method static map($name, $callback)                                             Creates a custom framework method.
- * @method static register($name, $class, [$params], [$callback])                   Registers a class to a framework method.
- * @method static before($name, $callback)                                          Adds a filter before a framework method.
- * @method static after($name, $callback)                                           Adds a filter after a framework method.
- * @method static get($key)                                                         Gets a variable.
- * @method static set($key, $value)                                                 Sets a variable.
- * @method static has($key)                                                         Checks if a variable is set.
- * @method static clear([$key])                                                     Clears a variable.
- * @method static log($msg, array $context = [], $level = 'DEBUG', $wf = false)     logging.
+ * @method static PlumeEngine  app()                                                             Gets the application object instance.
+ * @method static PlumeRequest  request()                                                         Gets the current HTTP request object.
+ * @method static PlumeResponse response()                                                        Gets the current HTTP response object.
+ * @method static PlumeView     view()                                                            Gets the view/template renderer.
+ * @method static PlumeRouter   router()                                                          Gets the URL router.
+ * @method static PlumeLogger   logger()                                                          Gets the logger.
+ * @method static void          start()                                                           Starts the framework.
+ * @method static void          stop(int $code = null)                                            Stops the framework and sends a response.
+ * @method static void          halt(int $code = 200, string $message = '')                       Stop the framework with a status code and message.
+ * @method static void          route(string $pattern, callable $callback)                        Maps a URL pattern to a callback.
+ * @method static void          group(string $prefix, callable $callback, array $middlewares = []) Groups routes under a common prefix with optional middleware.
+ * @method static void          render(string $file, array $data = [], string $key = null, string $layout = '') Renders a template file.
+ * @method static void          error(\Throwable $e)                                              Sends an HTTP 500 response.
+ * @method static void          notFound()                                                        Sends an HTTP 404 response.
+ * @method static void          json(mixed $data, int $code = 200, bool $encode = true, string $charset = 'utf-8', int $option = 0) Sends a JSON response.
+ * @method static void          jsonp(mixed $data, string $param = 'jsonp', int $code = 200, bool $encode = true, string $charset = 'utf-8', int $option = 0) Sends a JSONP response.
+ * @method static void          map(string $name, callable $callback)                             Creates a custom framework method.
+ * @method static void          register(string $name, string $class, array $params = [], callable $callback = null) Registers a class to a framework method.
+ * @method static void          before(string $name, callable $callback)                          Adds a before-filter on a framework method.
+ * @method static void          after(string $name, callable $callback)                           Adds an after-filter on a framework method.
+ * @method static mixed         get(string $key)                                                  Gets an engine variable.
+ * @method static void          set(string $key, mixed $value)                                    Sets an engine variable.
+ * @method static bool          has(string $key)                                                  Checks if an engine variable is set.
+ * @method static void          clear(string $key = null)                                         Clears an engine variable (or all variables).
+ * @method static void          path(string $path)                                                Adds a path for class autoloading.
+ * @method static void          log(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false) Write a log entry.
  */
 class PlumePHP
 {

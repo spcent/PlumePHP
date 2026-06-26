@@ -1,0 +1,32 @@
+parameters:
+    level: 5
+
+    paths:
+        - library/
+
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+
+    # Constants whose values vary at runtime (IS_CLI, IS_GET …) — PHPStan
+    # should not try to evaluate them as literal true/false in conditions.
+    dynamicConstantNames:
+        - IS_CLI
+        - IS_GET
+        - IS_POST
+        - IS_AJAX
+
+    # Exclude vendored / legacy code bundled inside library/
+    excludePaths:
+        - library/vendor/*
+        - library/core/Plume/Libs/Medoo.php
+        - library/core/Plume/Libs/JsonRpcServer.php
+
+    # PlumeViewObject is an application-level class injected at runtime;
+    # the framework cannot declare it statically.
+    ignoreErrors:
+        - message: '#Instantiated class PlumeViewObject not found#'
+          path: library/core/Plume/Libs/JsonRpcServer.php
+
+    # PHPStan flags PHPDoc-driven booleans in conditions as "always true/false"
+    # because it treats @param bool literally. Disable to reduce noise.
+    treatPhpDocTypesAsCertain: false

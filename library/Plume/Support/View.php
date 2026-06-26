@@ -33,13 +33,6 @@ class PlumeView
     protected $vars = [];
 
     /**
-     * Template file.
-     *
-     * @var string
-     */
-    private $template;
-
-    /**
      * Resolved content path (set during render).
      */
     private string $content = '';
@@ -114,6 +107,15 @@ class PlumeView
      * Set to a writable path to enable compilation caching; leave empty to disable.
      */
     public string $cachePath = '';
+
+    /**
+     * Resolves a named variable from the application container.
+     * Used for the `path.key::template` syntax in getTemplate().
+     * Defaults to PlumePHP::get() when null; inject in tests or isolated contexts.
+     *
+     * @var callable|null
+     */
+    public $variableResolver = null;
 
     /**
      * Renders a template.
@@ -195,11 +197,31 @@ class PlumeView
 
     /**
      * Compiles template syntax sugar to plain PHP.
+     *
+     * Supported directives (processed in order):
+     *   {# comment #}                        → removed
+     *   {extends 'parent'}                   → compile-time template inheritance
+     *   {block 'name'}...{/block}            → define/override a named block
+     *   {yield 'name'}                       → output a block in the parent template
+     *   {$var|raw}                           → unescaped echo
+     *   {$var}                               → htmlspecialchars-escaped echo
+     *
+     * Inheritance is resolved at compile time: child blocks are injected into the
+     * parent source before any PHP is emitted, so the result is a single flat
+     * template with no runtime includes.
      */
     protected function compileTemplate(string $source): string
     {
         // Strip {# comment #} blocks
         $source = preg_replace('/\{#.*?#\}/s', '', $source);
+
+        // Template inheritance: {extends 'parent'} or {extends "parent"}
+        if (preg_match('/^\s*\{extends\s+[\'"]([^\'"]+)[\'"]\s*\}/s', $source, $m)) {
+            $source = $this->resolveInheritance($source, $m[1]);
+        }
+
+        // Any remaining {yield 'name'} in standalone templates → empty string
+        $source = preg_replace('/\{yield\s+[\'"][^\'"]*[\'"]\s*\}/', '', (string) $source);
 
         // {$var|raw} compiles to unescaped echo tag
         $source = preg_replace(
@@ -216,6 +238,62 @@ class PlumeView
         );
 
         return $source;
+    }
+
+    /**
+     * Resolve template inheritance at compile time.
+     *
+     * 1. Extract all {block}...{/block} definitions from the child source.
+     * 2. Load the parent source.
+     * 3. Replace {yield 'name'} in the parent with child block content (or empty string).
+     * 4. Replace {block 'name'}...{/block} in the parent with the child override or the
+     *    parent's own default content.
+     * 5. Return the fully merged source for normal compilation.
+     *
+     * @param string $childSource Full child template source (including {extends …})
+     * @param string $parentName  Parent template name (without path/extension)
+     *
+     * @return string Merged template source ready for variable-substitution compilation
+     */
+    private function resolveInheritance(string $childSource, string $parentName): string
+    {
+        $parentPath = $this->path . DS . $parentName . $this->extension;
+        if (!file_exists($parentPath)) {
+            return $childSource;
+        }
+
+        // Strip {extends …} directive from child
+        $childBody = preg_replace('/^\s*\{extends\s+[\'"][^\'"]+[\'"]\s*\}\s*/s', '', $childSource);
+        // Strip comments from child body
+        $childBody = preg_replace('/\{#.*?#\}/s', '', (string) $childBody);
+
+        // Collect child block definitions: name → raw inner content
+        $childBlocks = [];
+        if (preg_match_all('/\{block\s+[\'"]([^\'"]+)[\'"]\s*\}(.*?)\{\/block\}/s', (string) $childBody, $matches, PREG_SET_ORDER)) {
+            foreach ($matches as $match) {
+                $childBlocks[$match[1]] = $match[2];
+            }
+        }
+
+        // Load and clean parent source
+        $parentSource = (string) file_get_contents($parentPath);
+        $parentSource = preg_replace('/\{#.*?#\}/s', '', $parentSource);
+
+        // Replace {yield 'name'} with child block content (or empty string)
+        $merged = preg_replace_callback(
+            '/\{yield\s+[\'"]([^\'"]+)[\'"]\s*\}/',
+            fn (array $m): string => $childBlocks[$m[1]] ?? '',
+            (string) $parentSource
+        );
+
+        // Replace {block 'name'}...{/block} in parent with child override or parent default
+        $merged = preg_replace_callback(
+            '/\{block\s+[\'"]([^\'"]+)[\'"]\s*\}(.*?)\{\/block\}/s',
+            fn (array $m): string => $childBlocks[$m[1]] ?? $m[2],
+            (string) $merged
+        );
+
+        return (string) $merged;
     }
 
     /**
@@ -285,8 +363,9 @@ class PlumeView
         if (2 === count($parts)) {
             $base_path_key = $parts[0];
             $file_path = $parts[1];
+            $resolver = $this->variableResolver ?? static fn($k) => \PlumePHP::get($k);
 
-            return rtrim(PlumePHP::get($base_path_key), '/').'/'.$file_path;
+            return rtrim($resolver($base_path_key), '/') . '/' . $file_path;
         }
 
         if (('/' === substr($file, 0, 1))) {
@@ -297,13 +376,12 @@ class PlumeView
     }
 
     /**
-     * Displays escaped output.
+     * Echoes an HTML-escaped string.
      *
-     * @param string $str String to escape
-     *
-     * @return string Escaped string
+     * @param string $str String to escape and echo
+     * @return void
      */
-    public function e(string $str)
+    public function e(string $str): void
     {
         echo htmlspecialchars($str, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }

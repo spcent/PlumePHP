@@ -102,11 +102,11 @@ class PlumeResponse
     /**
      * Sets the HTTP status of the response.
      *
-     * @param int $code HTTP status code
+     * @param int|null $code HTTP status code
      *
      * @throws \Exception If invalid status code
      *
-     * @return int|object Self reference
+     * @return ($code is null ? int : static)
      */
     public function status(?int $code = null)
     {
@@ -251,7 +251,7 @@ class PlumeResponse
     /**
      * Gets the content length.
      *
-     * @return string Content length
+     * @return int Content length in bytes
      */
     public function getContentLength()
     {

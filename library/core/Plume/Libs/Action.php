@@ -3,7 +3,7 @@
 namespace Plume\Libs;
 
 /**
- * 抽象Action动作逻辑
+ * Abstract base class for all action handlers.
  */
 abstract class Action
 {
@@ -30,7 +30,7 @@ abstract class Action
     private $params = [];
     
     /**
-     * csrf验证
+     * Whether to enforce CSRF token validation for this action.
      * @var bool
      */
     protected $csrfValidate = true;
@@ -40,15 +40,26 @@ abstract class Action
      *
      * Format:
      *   protected array $rules = [
-     *       'field'  => 'required',
-     *       'age'    => 'required|int|min:18|max:120',
-     *       'email'  => 'required|email',
-     *       'name'   => 'required|string|minLen:2|maxLen:64',
-     *       'status' => 'int',
+     *       'field'   => 'required',
+     *       'age'     => 'required|int|min:18|max:120',
+     *       'email'   => 'required|email',
+     *       'name'    => 'required|string|minLen:2|maxLen:64',
+     *       'status'  => 'required|in:active,inactive,pending',
+     *       'phone'   => 'required|regex:/^1[3-9]\d{9}$/',
+     *       'avatar'  => 'file|mimes:jpg,jpeg,png|maxSize:2048',
+     *       'pass2'   => 'required|confirmed:password',
+     *       'tags'    => 'array|each:string',
      *   ];
      *
-     * Supported constraints: required, int, float, string, email,
-     *   min:<n>, max:<n>, minLen:<n>, maxLen:<n>
+     * Supported constraints:
+     *   required, int, float, string, email,
+     *   min:<n>, max:<n>, minLen:<n>, maxLen:<n>,
+     *   regex:<pattern>, in:<v1,v2,...>,
+     *   file, mimes:<ext,...>, maxSize:<kb>,
+     *   confirmed[:<other_field>], array, each:<rule>
+     *
+     * Register project-level custom rules once at boot time:
+     *   Action::addRule('phone_cn', fn($v) => (bool)preg_match('/^1[3-9]\d{9}$/', $v));
      *
      * Override validate() for custom logic; return an array of field→message
      * pairs to signal failure, or an empty array on success.
@@ -56,6 +67,20 @@ abstract class Action
      * @var array<string, string>
      */
     protected array $rules = [];
+
+    /** @var array<string, callable(mixed): bool> Globally registered custom rules */
+    private static array $customRules = [];
+
+    /**
+     * Register a named custom validation rule available to all Action subclasses.
+     *
+     * @param string   $name     Rule name used in $rules strings
+     * @param callable $callback fn(mixed $value): bool — true means valid
+     */
+    public static function addRule(string $name, callable $callback): void
+    {
+        self::$customRules[$name] = $callback;
+    }
 
     protected $jsFiles = [];
     protected $cssFiles = [];
@@ -115,9 +140,9 @@ abstract class Action
     }
 
     /**
-     * 模板变量赋值
-     * @param string $name 名称
-     * @param string $value 值
+     * Assign a variable to the view template.
+     * @param string $name  Variable name
+     * @param mixed  $value Variable value
      * @return self
      */
     public function assign($name, $value)
@@ -127,11 +152,11 @@ abstract class Action
     }
 
     /**
-     * 渲染模板
-     * @param string $view 模板文件
-     * @param string $layout 布局文件
-     * @param array $data 模板数据
-     * @param string $module 模块名称，默认为false
+     * Render a view template with an optional layout.
+     * @param string      $view   View file name (without extension)
+     * @param string      $layout Layout file name; empty string disables layout
+     * @param array       $data   Extra variables passed to the template
+     * @param string|false $module Module name; defaults to the current module
      */
     public function render($view, $layout = 'layout', $data = [], $module = false)
     {
@@ -154,7 +179,7 @@ abstract class Action
     }
 
     /**
-     * run方法
+     * Entry point called by the dispatcher; handles CSRF, validation, and lifecycle hooks.
      */
     public function run()
     {
@@ -204,54 +229,155 @@ abstract class Action
             $constraints = array_filter(array_map('trim', explode('|', $ruleStr)));
 
             foreach ($constraints as $constraint) {
-                [$rule, $arg] = array_pad(explode(':', $constraint, 2), 2, null);
+                // Split on first colon only; regex rules may contain colons inside the pattern
+                $colonPos = strpos($constraint, ':');
+                if ($colonPos !== false) {
+                    $rule = substr($constraint, 0, $colonPos);
+                    $arg  = substr($constraint, $colonPos + 1);
+                } else {
+                    $rule = $constraint;
+                    $arg  = null;
+                }
+
+                $empty = ($value === null || $value === '');
 
                 switch ($rule) {
                     case 'required':
-                        if ($value === null || $value === '') {
-                            $errors[$field] = "{$field} 不能为空";
+                        if ($empty) {
+                            $errors[$field] = "{$field} is required";
                         }
                         break;
 
                     case 'int':
-                        if ($value !== null && $value !== '' && !ctype_digit((string) $value) && !is_int($value)) {
-                            $errors[$field] = "{$field} 必须是整数";
+                        if (!$empty && !ctype_digit((string) $value) && !is_int($value)) {
+                            $errors[$field] = "{$field} must be an integer";
                         }
                         break;
 
                     case 'float':
-                        if ($value !== null && $value !== '' && !is_numeric($value)) {
-                            $errors[$field] = "{$field} 必须是数字";
+                        if (!$empty && !is_numeric($value)) {
+                            $errors[$field] = "{$field} must be a number";
+                        }
+                        break;
+
+                    case 'string':
+                        if (!$empty && !is_string($value)) {
+                            $errors[$field] = "{$field} must be a string";
                         }
                         break;
 
                     case 'email':
-                        if ($value !== null && $value !== '' && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
-                            $errors[$field] = "{$field} 邮箱格式不正确";
+                        if (!$empty && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                            $errors[$field] = "{$field} must be a valid email address";
                         }
                         break;
 
                     case 'min':
-                        if ($value !== null && $value !== '' && is_numeric($value) && (float) $value < (float) $arg) {
-                            $errors[$field] = "{$field} 不能小于 {$arg}";
+                        if (!$empty && is_numeric($value) && (float) $value < (float) $arg) {
+                            $errors[$field] = "{$field} must be at least {$arg}";
                         }
                         break;
 
                     case 'max':
-                        if ($value !== null && $value !== '' && is_numeric($value) && (float) $value > (float) $arg) {
-                            $errors[$field] = "{$field} 不能大于 {$arg}";
+                        if (!$empty && is_numeric($value) && (float) $value > (float) $arg) {
+                            $errors[$field] = "{$field} must be no greater than {$arg}";
                         }
                         break;
 
                     case 'minLen':
-                        if ($value !== null && mb_strlen((string) $value) < (int) $arg) {
-                            $errors[$field] = "{$field} 长度不能少于 {$arg} 个字符";
+                        if (!$empty && mb_strlen((string) $value) < (int) $arg) {
+                            $errors[$field] = "{$field} must be at least {$arg} characters long";
                         }
                         break;
 
                     case 'maxLen':
-                        if ($value !== null && mb_strlen((string) $value) > (int) $arg) {
-                            $errors[$field] = "{$field} 长度不能超过 {$arg} 个字符";
+                        if (!$empty && mb_strlen((string) $value) > (int) $arg) {
+                            $errors[$field] = "{$field} must be no more than {$arg} characters long";
+                        }
+                        break;
+
+                    case 'regex':
+                        // arg is the pattern, e.g.  /^1[3-9]\d{9}$/
+                        if (!$empty && !preg_match((string) $arg, (string) $value)) {
+                            $errors[$field] = "{$field} format is invalid";
+                        }
+                        break;
+
+                    case 'in':
+                        // arg is comma-separated allowed values, e.g. active,inactive,pending
+                        if (!$empty) {
+                            $allowed = array_map('trim', explode(',', (string) $arg));
+                            if (!in_array((string) $value, $allowed, true)) {
+                                $errors[$field] = "{$field} must be one of: {$arg}";
+                            }
+                        }
+                        break;
+
+                    case 'confirmed':
+                        // Verify value equals another field (default: {field}_confirm)
+                        $otherField = $arg ?: ($field . '_confirm');
+                        $other      = $this->getParam($otherField);
+                        if ($value !== $other) {
+                            $errors[$field] = "{$field} does not match {$otherField}";
+                        }
+                        break;
+
+                    case 'array':
+                        if (!$empty && !is_array($value)) {
+                            $errors[$field] = "{$field} must be an array";
+                        }
+                        break;
+
+                    case 'each':
+                        // Apply a single sub-rule to every element of an array field
+                        if (is_array($value) && $arg !== null) {
+                            foreach ($value as $idx => $item) {
+                                $subErrors = $this->applySimpleRule("{$field}[{$idx}]", $item, (string) $arg, null);
+                                if ($subErrors) {
+                                    $errors[$field] = $subErrors;
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+
+                    case 'file':
+                        // Checks the field exists in $_FILES and has no upload error
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo === null || ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                            $errors[$field] = "{$field} file upload failed or no file selected";
+                        }
+                        break;
+
+                    case 'mimes':
+                        // Comma-separated extensions, e.g. jpg,jpeg,png
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo && ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                            $ext      = strtolower(pathinfo($fileInfo['name'], PATHINFO_EXTENSION));
+                            $allowed  = array_map('trim', explode(',', strtolower((string) $arg)));
+                            if (!in_array($ext, $allowed, true)) {
+                                $errors[$field] = "{$field} only allows: {$arg} file types";
+                            }
+                        }
+                        break;
+
+                    case 'maxSize':
+                        // Maximum file size in kilobytes
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo && ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                            $sizeKb = ($fileInfo['size'] ?? 0) / 1024;
+                            if ($sizeKb > (float) $arg) {
+                                $errors[$field] = "{$field} file size must not exceed {$arg} KB";
+                            }
+                        }
+                        break;
+
+                    default:
+                        // Check registered custom rules
+                        if (isset(self::$customRules[$rule])) {
+                            if (!$empty && !(self::$customRules[$rule])($value)) {
+                                $errors[$field] = "{$field} format is invalid";
+                            }
                         }
                         break;
                 }
@@ -266,10 +392,30 @@ abstract class Action
     }
 
     /**
-     * display to json
-     * @param int $code 编码
-     * @param string $msg 消息
-     * @param mixed 数据
+     * Apply a single named rule to $value; used internally by the "each" rule.
+     *
+     * @return string Error message, or empty string if valid
+     */
+    private function applySimpleRule(string $label, mixed $value, string $rule, ?string $arg): string
+    {
+        $empty = ($value === null || $value === '');
+        return match ($rule) {
+            'required' => $empty ? "{$label} is required" : '',
+            'int'      => (!$empty && !ctype_digit((string) $value) && !is_int($value))
+                              ? "{$label} must be an integer" : '',
+            'float'    => (!$empty && !is_numeric($value)) ? "{$label} must be a number" : '',
+            'string'   => (!$empty && !is_string($value)) ? "{$label} must be a string" : '',
+            'email'    => (!$empty && !filter_var($value, FILTER_VALIDATE_EMAIL))
+                              ? "{$label} must be a valid email address" : '',
+            default    => '',
+        };
+    }
+
+    /**
+     * Emit a JSON envelope response.
+     * @param int    $code Response code (0 = success)
+     * @param string $msg  Human-readable message
+     * @param mixed  $data Response data payload
      */
     public function json($code, $msg, $data)
     {
@@ -287,25 +433,27 @@ abstract class Action
     }
 
     /**
-     * @param string $msg
-     * @param bool $json 是否强制显示json
+     * Terminate the action with an error response.
+     * @param string $msg  Error message
+     * @param int    $code Error code (default 1)
+     * @param bool   $json Force JSON output even for non-AJAX requests
      */
-    public function error($msg = "数据异常", $code = 1, $json = false)
+    public function error($msg = "Data error", $code = 1, $json = false)
     {
         if (!$json && !IS_AJAX) {
             $escapedMsg = htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $html = <<<EOF
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
     <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>出错啦</title>
+    <title>An Error Occurred</title>
     </head>
     <body>
     <div class="container">
-        <h1>出错啦！</h1>
+        <h1>An Error Occurred</h1>
         <p class="msg">{$escapedMsg}</p>
     </div>
     </body>
@@ -332,12 +480,12 @@ EOF;
     }
 
     /**
-     * 设置cookie
-     * @param $key
-     * @param $value
-     * @param int $expire
-     * @param string $path
-     * @param string $domain
+     * Set a cookie on the response.
+     * @param string $key    Cookie name
+     * @param string $value  Cookie value
+     * @param int    $expire Lifetime in seconds (default 86400)
+     * @param string $path   Cookie path
+     * @param string $domain Cookie domain
      */
     public function setCookie($key, $value, $expire = 86400, $path = '/', $domain = '')
     {
@@ -345,8 +493,8 @@ EOF;
     }
 
     /**
-     * 获取对应csrfToken
-     * @return null|string
+     * Generate (or refresh) the CSRF token cookie pair for the current request.
+     * @return string|null The masked CSRF token
      */
     public function createCsrfToken()
     {
@@ -410,8 +558,8 @@ EOF;
     }
 
     /**
-     * 获取csrf
-     * @return null
+     * Return the current CSRF token value.
+     * @return string|null
      */
     public function getCsrfToken()
     {
@@ -419,8 +567,8 @@ EOF;
     }
 
     /**
-     * 获取随机字符串
-     * @param int $len
+     * Generate a random hex string for use as a CSRF token.
+     * @param int $len Token length in characters
      * @return string
      */
     private function generateCsrf(int $len = 32): string
@@ -429,7 +577,8 @@ EOF;
     }
 
     /**
-     * 验证csrfToken
+     * Validate the CSRF token submitted with the current request.
+     * @return bool True if valid (or if the request method does not require validation)
      */
     public function validateCsrfToken()
     {

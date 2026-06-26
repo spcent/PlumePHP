@@ -103,7 +103,7 @@ class PlumeRequest
                 'scheme'     => self::getVar('SERVER_PROTOCOL', 'HTTP/1.1'),
                 'user_agent' => self::getVar('HTTP_USER_AGENT'),
                 'type'       => self::getVar('CONTENT_TYPE'),
-                'length'     => self::getVar('CONTENT_LENGTH', 0),
+                'length'     => self::getVar('CONTENT_LENGTH', '0'),
                 'query'      => new PlumeCollection($_GET),
                 'data'       => new PlumeCollection($_POST),
                 'cookies'    => new PlumeCollection($_COOKIE),
@@ -168,7 +168,7 @@ class PlumeRequest
     {
         $method = self::getMethod();
         if ('POST' === $method || 'PUT' === $method || 'PATCH' === $method) {
-            return file_get_contents('php://input') ?? '';
+            return file_get_contents('php://input') ?: '';
         }
         return '';
     }

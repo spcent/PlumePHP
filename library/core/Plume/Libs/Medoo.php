@@ -1048,6 +1048,41 @@ class Medoo
         return false;
     }
 
+    /**
+     * Execute $callback inside a database transaction and return its value.
+     *
+     * Unlike the legacy action(), transaction() always commits on success and
+     * always rolls back (re-throwing) on any Throwable, making it safe to use
+     * with modern void/null-returning operations that don't signal failure via
+     * a false return value.
+     *
+     * Usage:
+     *   $newId = $db->transaction(function (Medoo $db) use ($data) {
+     *       $id = $db->insert('orders', $data);
+     *       $db->update('inventory', ['stock[-]' => 1], ['product_id' => $data['product_id']]);
+     *       return $id;
+     *   });
+     *
+     * @template T
+     * @param callable(static): T $callback
+     * @return T Whatever the callback returns
+     * @throws \Throwable Re-throws any exception/error after rolling back
+     */
+    public function transaction(callable $callback): mixed
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $result = $callback($this);
+            $this->pdo->commit();
+            return $result;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     public function id()
     {
         $type = $this->type;
