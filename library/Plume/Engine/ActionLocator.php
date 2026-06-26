@@ -43,7 +43,7 @@ class ActionLocator
 
             // Validate segment: only alphanumeric + underscore, starts with letter
             if ($name !== '' && (!preg_match($preg, $name) || strlen($name) > 15)) {
-                \PlumePHP::app()->_halt(404,
+                throw new ActionException(404,
                     "!!! 404(invalid) !!! uri: {$requestUri}, name: {$name}");
             }
 
@@ -51,7 +51,7 @@ class ActionLocator
             if ($name === '') {
                 $indexPath = $filepath . DS . 'index.action.php';
                 if (!(self::$pathCache[$indexPath] ??= file_exists($indexPath))) {
-                    \PlumePHP::app()->_halt(404,
+                    throw new ActionException(404,
                         "!!! 404(missing index) !!! uri: {$requestUri}");
                 }
                 $file .= DS . 'index';
@@ -73,7 +73,7 @@ class ActionLocator
                 break;
             }
 
-            \PlumePHP::app()->_halt(404,
+            throw new ActionException(404,
                 "!!! 404 !!! uri={$requestUri} parseto:" . substr($filePath, strlen(APP_PATH)));
         }
 
@@ -84,7 +84,7 @@ class ActionLocator
 
         $actionFile = APP_PATH . DS . $module . DS . 'actions' . DS . $file . '.action.php';
         if (!(self::$pathCache[$actionFile] ??= file_exists($actionFile))) {
-            \PlumePHP::app()->_halt(404,
+            throw new ActionException(404,
                 "!!! 404(missing action file) !!! uri: {$requestUri}"
                 . ' action file: ' . substr($actionFile, strlen(APP_PATH)));
         }

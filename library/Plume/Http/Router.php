@@ -31,6 +31,18 @@ class PlumeRouter
      */
     protected $index = 0;
 
+    /** Returns the current PlumeRequest (injected by Engine; falls back to facade). */
+    private \Closure $requestProvider;
+
+    /** Returns the current PlumeResponse (injected by Engine; falls back to facade). */
+    private \Closure $responseProvider;
+
+    public function __construct(?\Closure $requestProvider = null, ?\Closure $responseProvider = null)
+    {
+        $this->requestProvider  = $requestProvider  ?? static fn() => \PlumePHP::request();
+        $this->responseProvider = $responseProvider ?? static fn() => \PlumePHP::response();
+    }
+
     /**
      * Gets mapped routes.
      *
@@ -215,16 +227,18 @@ class PlumeRouter
         }
 
         // Wrap each new route's callback in the middleware stack
+        $responseProvider = $this->responseProvider;
+        $requestProvider  = $this->requestProvider;
         for ($i = $countBefore; $i < $countAfter; $i++) {
-            $route = $this->routes[$i]->withPrefix($prefix);
+            $route    = $this->routes[$i]->withPrefix($prefix);
             $original = $route->callback;
-            $stack = array_reverse($middlewares);
-            $handler = new class($original) implements PlumeRequestHandlerInterface {
-                public function __construct(private mixed $cb) {}
+            $stack    = array_reverse($middlewares);
+            $handler  = new class($original, $responseProvider) implements PlumeRequestHandlerInterface {
+                public function __construct(private mixed $cb, private \Closure $rp) {}
                 public function handle(PlumeRequest $request): PlumeResponse
                 {
                     ($this->cb)($request);
-                    return PlumePHP::response();
+                    return ($this->rp)();
                 }
             };
             foreach ($stack as $mwClass) {
@@ -240,9 +254,9 @@ class PlumeRouter
                     }
                 };
             }
-            $finalHandler = $handler;
-            $this->routes[$i] = $route->withCallback(function () use ($finalHandler) {
-                $finalHandler->handle(PlumePHP::request());
+            $finalHandler     = $handler;
+            $this->routes[$i] = $route->withCallback(function () use ($finalHandler, $requestProvider) {
+                $finalHandler->handle(($requestProvider)());
             });
         }
     }

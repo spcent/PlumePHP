@@ -21,14 +21,14 @@ class ActionInvoker
     public static function invoke(string $className, string $requestUri): mixed
     {
         if (!class_exists($className)) {
-            \PlumePHP::app()->_halt(404,
+            throw new ActionException(404,
                 "!!! 404 !!! uri={$requestUri} class not exist: {$className}");
         }
 
         $instance = new $className();
 
         if (!method_exists($instance, 'run')) {
-            \PlumePHP::app()->_halt(404,
+            throw new ActionException(404,
                 "!!! 404 !!! uri={$requestUri} no run method: {$className}");
         }
 

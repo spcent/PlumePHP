@@ -90,6 +90,7 @@ class PlumeEngine
             $this->vars = [];
             $this->loader->reset();
             $this->dispatcher->reset();
+            $this->middlewares = [];
         }
 
         // Register default components
@@ -98,8 +99,12 @@ class PlumeEngine
         $this->loader->register('view', 'PlumeView', [], function ($view) use ($self) {
             $view->path = $self->get('plumephp.views.path');
             $view->extension = $self->get('plumephp.views.extension');
+            $view->variableResolver = fn(string $k): mixed => $self->get($k);
         });
-        $this->loader->register('router', 'PlumeRouter');
+        $this->loader->register('router', 'PlumeRouter', [
+            fn() => $self->request(),
+            fn() => $self->response(),
+        ]);
         $this->loader->register('logger', 'PlumeLogger');
 
         // Register framework methods
@@ -320,6 +325,12 @@ class PlumeEngine
     /**
      * Registers a PSR-15-style middleware to run before route dispatch.
      */
+    /** @return PlumeMiddlewareInterface[] */
+    public function getMiddlewares(): array
+    {
+        return $this->middlewares;
+    }
+
     public function addMiddleware(PlumeMiddlewareInterface $middleware): static
     {
         $this->middlewares[] = $middleware;
@@ -754,7 +765,11 @@ class PlumeEngine
             require $actionFile;
         } else {
             // 3. Locate action file by walking URL segments
-            $located   = ActionLocator::locate($module, $pathnames, $requestUri);
+            try {
+                $located = ActionLocator::locate($module, $pathnames, $requestUri);
+            } catch (ActionException $e) {
+                $this->_halt($e->getHttpCode(), $e->getMessage());
+            }
             $file      = $located['file'];
             $actionFile = $located['actionFile'];
             $stopIndex  = $located['stopIndex'];
@@ -778,7 +793,11 @@ class PlumeEngine
         ]);
 
         // 6. Instantiate and run
-        $res = ActionInvoker::invoke($className, $requestUri);
+        try {
+            $res = ActionInvoker::invoke($className, $requestUri);
+        } catch (ActionException $e) {
+            $this->_halt($e->getHttpCode(), $e->getMessage());
+        }
 
         L('[web]class name: {class} success, result: {result}, cost: {cost}s', [
             'class'  => $className,

@@ -202,6 +202,7 @@ require_once __DIR__ . '/Plume/Support/Logger.php';
 require_once __DIR__ . '/Plume/Support/LogHandlers.php';
 require_once __DIR__ . '/Plume/Support/Schema.php';
 require_once __DIR__ . '/Plume/Support/JsonMapper.php';
+require_once __DIR__ . '/Plume/Engine/ActionException.php';
 require_once __DIR__ . '/Plume/Engine/ActionResolver.php';
 require_once __DIR__ . '/Plume/Engine/ActionLocator.php';
 require_once __DIR__ . '/Plume/Engine/ActionNaming.php';
@@ -216,27 +217,32 @@ require_once __DIR__ . '/PlumeHelper.php';
  *
  * Core.
  *
- * @method static app()                                                             Gets the application object instance
- * @method static start()                                                           Starts the framework.
- * @method static path($path)                                                       Adds a path for autoloading classes.
- * @method static stop()                                                            Stops the framework and sends a response.
- * @method static halt($code = 200, $message = '')                                  Stop the framework with an optional status code and message.
- * @method static route($pattern, $callback)                                        Maps a URL pattern to a callback.
- * @method static group($prefix, $callback, $middlewares = [])                      Groups routes under a common prefix with optional middleware.
- * @method static render($file, [$data], [$key], [$layout])                         Renders a template file.
- * @method static error($exception)                                                 Sends an HTTP 500 response.
- * @method static notFound()                                                        Sends an HTTP 404 response.
- * @method static json($data, [$code], [$encode], [$charset], [$option])            Sends a JSON response.
- * @method static jsonp($data, [$param], [$code], [$encode], [$charset], [$option]) Sends a JSONP response.
- * @method static map($name, $callback)                                             Creates a custom framework method.
- * @method static register($name, $class, [$params], [$callback])                   Registers a class to a framework method.
- * @method static before($name, $callback)                                          Adds a filter before a framework method.
- * @method static after($name, $callback)                                           Adds a filter after a framework method.
- * @method static get($key)                                                         Gets a variable.
- * @method static set($key, $value)                                                 Sets a variable.
- * @method static has($key)                                                         Checks if a variable is set.
- * @method static clear([$key])                                                     Clears a variable.
- * @method static log($msg, array $context = [], $level = 'DEBUG', $wf = false)     logging.
+ * @method static PlumeEngine  app()                                                             Gets the application object instance.
+ * @method static PlumeRequest  request()                                                         Gets the current HTTP request object.
+ * @method static PlumeResponse response()                                                        Gets the current HTTP response object.
+ * @method static PlumeView     view()                                                            Gets the view/template renderer.
+ * @method static PlumeRouter   router()                                                          Gets the URL router.
+ * @method static PlumeLogger   logger()                                                          Gets the logger.
+ * @method static void          start()                                                           Starts the framework.
+ * @method static void          stop(int $code = null)                                            Stops the framework and sends a response.
+ * @method static void          halt(int $code = 200, string $message = '')                       Stop the framework with a status code and message.
+ * @method static void          route(string $pattern, callable $callback)                        Maps a URL pattern to a callback.
+ * @method static void          group(string $prefix, callable $callback, array $middlewares = []) Groups routes under a common prefix with optional middleware.
+ * @method static void          render(string $file, array $data = [], string $key = null, string $layout = '') Renders a template file.
+ * @method static void          error(\Throwable $e)                                              Sends an HTTP 500 response.
+ * @method static void          notFound()                                                        Sends an HTTP 404 response.
+ * @method static void          json(mixed $data, int $code = 200, bool $encode = true, string $charset = 'utf-8', int $option = 0) Sends a JSON response.
+ * @method static void          jsonp(mixed $data, string $param = 'jsonp', int $code = 200, bool $encode = true, string $charset = 'utf-8', int $option = 0) Sends a JSONP response.
+ * @method static void          map(string $name, callable $callback)                             Creates a custom framework method.
+ * @method static void          register(string $name, string $class, array $params = [], callable $callback = null) Registers a class to a framework method.
+ * @method static void          before(string $name, callable $callback)                          Adds a before-filter on a framework method.
+ * @method static void          after(string $name, callable $callback)                           Adds an after-filter on a framework method.
+ * @method static mixed         get(string $key)                                                  Gets an engine variable.
+ * @method static void          set(string $key, mixed $value)                                    Sets an engine variable.
+ * @method static bool          has(string $key)                                                  Checks if an engine variable is set.
+ * @method static void          clear(string $key = null)                                         Clears an engine variable (or all variables).
+ * @method static void          path(string $path)                                                Adds a path for class autoloading.
+ * @method static void          log(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false) Write a log entry.
  */
 class PlumePHP
 {

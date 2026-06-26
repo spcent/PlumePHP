@@ -116,6 +116,15 @@ class PlumeView
     public string $cachePath = '';
 
     /**
+     * Resolves a named variable from the application container.
+     * Used for the `path.key::template` syntax in getTemplate().
+     * Defaults to PlumePHP::get() when null; inject in tests or isolated contexts.
+     *
+     * @var callable|null
+     */
+    public $variableResolver = null;
+
+    /**
      * Renders a template.
      *
      * @param string $file   Template file
@@ -361,8 +370,9 @@ class PlumeView
         if (2 === count($parts)) {
             $base_path_key = $parts[0];
             $file_path = $parts[1];
+            $resolver = $this->variableResolver ?? static fn($k) => \PlumePHP::get($k);
 
-            return rtrim(PlumePHP::get($base_path_key), '/').'/'.$file_path;
+            return rtrim($resolver($base_path_key), '/') . '/' . $file_path;
         }
 
         if (('/' === substr($file, 0, 1))) {
