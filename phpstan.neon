@@ -1,5 +1,5 @@
 parameters:
-    level: 5
+    level: 8
 
     paths:
         - library/
@@ -20,6 +20,8 @@ parameters:
         - library/vendor/*
         - library/core/Plume/Libs/Medoo.php
         - library/core/Plume/Libs/JsonRpcServer.php
+        - library/core/Plume/Libs/AliPhoneMsg.php
+        - library/core/Plume/Libs/Curl.php
 
     # PlumeViewObject is an application-level class injected at runtime;
     # the framework cannot declare it statically.

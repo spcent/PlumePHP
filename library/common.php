@@ -33,6 +33,9 @@ if (!function_exists('json_output')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('curl_get_contents')) {
+    /**
+     * @param array<string, mixed> $post_data
+     */
     function curl_get_contents(
         string $url,
         array $post_data = [],
@@ -81,6 +84,9 @@ if (!function_exists('generate_nonce_str')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('get_client_ip')) {
+    /**
+     * @param string[] $trusted_proxies
+     */
     function get_client_ip(int $type = 0, array $trusted_proxies = []): string|int
     {
         return PlumeHelper::getClientIp($type, $trusted_proxies);
@@ -88,6 +94,9 @@ if (!function_exists('get_client_ip')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('signature')) {
+    /**
+     * @param array<string, mixed> $datas
+     */
     function signature(array $datas, string $key): string
     {
         return PlumeHelper::signature($datas, $key);
@@ -95,6 +104,9 @@ if (!function_exists('signature')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('export_csv')) {
+    /**
+     * @param array<mixed> $data
+     */
     function export_csv(string $filename, array $data): never
     {
         PlumeHelper::exportCsv($filename, $data);
@@ -109,6 +121,10 @@ if (!function_exists('authcode')) {
 }
 // ------------------------------------------------------------------------
 if (!function_exists('array_merge_deep')) {
+    /**
+     * @param array<mixed> $arr1
+     * @param array<mixed> $arr2
+     */
     function array_merge_deep(array &$arr1, array $arr2): void
     {
         PlumeHelper::arrayMergeDeep($arr1, $arr2);

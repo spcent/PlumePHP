@@ -6,31 +6,25 @@ class PlumeView
 {
     /**
      * Location of view templates.
-     *
-     * @var string
      */
-    public $path;
+    public string $path = '.';
 
     /**
      * File extension.
-     *
-     * @var string
      */
-    public $extension = '.tpl.php';
+    public string $extension = '.tpl.php';
 
     /**
      * Theme.
-     *
-     * @var string
      */
-    public $theme = 'default';
+    public string $theme = 'default';
 
     /**
      * View variables.
      *
-     * @var array
+     * @var array<string, mixed>
      */
-    protected $vars = [];
+    protected array $vars = [];
 
     /**
      * Resolved content path (set during render).
@@ -65,11 +59,11 @@ class PlumeView
      * @param mixed $key   Key
      * @param mixed $value Value
      */
-    public function set($key, $value = null)
+    public function set(mixed $key, mixed $value = null): void
     {
-        if (is_array($key) || is_object($key)) {
+        if (is_array($key) || $key instanceof \Traversable) {
             foreach ($key as $k => $v) {
-                $this->vars[$k] = $v;
+                $this->vars[(string) $k] = $v;
             }
         } else {
             $this->vars[$key] = $value;
@@ -93,7 +87,7 @@ class PlumeView
      *
      * @param string $key Key
      */
-    public function clear($key = null)
+    public function clear(?string $key = null): void
     {
         if (null === $key) {
             $this->vars = [];
@@ -115,14 +109,14 @@ class PlumeView
      *
      * @var callable|null
      */
-    public $variableResolver = null;
+    public mixed $variableResolver = null;
 
     /**
      * Renders a template.
      *
-     * @param string $file   Template file
-     * @param array  $data   Template data
-     * @param string $layout layout file
+     * @param string               $file   Template file
+     * @param array<string, mixed>|null $data   Template data
+     * @param string|false         $layout layout file
      *
      * @throws \Exception If template not found
      */
@@ -213,7 +207,7 @@ class PlumeView
     protected function compileTemplate(string $source): string
     {
         // Strip {# comment #} blocks
-        $source = preg_replace('/\{#.*?#\}/s', '', $source);
+        $source = (string) preg_replace('/\{#.*?#\}/s', '', $source);
 
         // Template inheritance: {extends 'parent'} or {extends "parent"}
         if (preg_match('/^\s*\{extends\s+[\'"]([^\'"]+)[\'"]\s*\}/s', $source, $m)) {
@@ -221,17 +215,17 @@ class PlumeView
         }
 
         // Any remaining {yield 'name'} in standalone templates → empty string
-        $source = preg_replace('/\{yield\s+[\'"][^\'"]*[\'"]\s*\}/', '', (string) $source);
+        $source = (string) preg_replace('/\{yield\s+[\'"][^\'"]*[\'"]\s*\}/', '', $source);
 
         // {$var|raw} compiles to unescaped echo tag
-        $source = preg_replace(
+        $source = (string) preg_replace(
             '/\{\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*(?:\[[^\]]+\])*)\|raw\}/',
             '<?= $$1 ?>',
             $source
         );
 
         // {$var} compiles to escaped echo tag
-        $source = preg_replace(
+        $source = (string) preg_replace(
             '/\{\$([a-zA-Z_\x80-\xff][a-zA-Z0-9_\x80-\xff]*(?:\[[^\]]+\])*)\}/',
             "<?= htmlspecialchars((string)\$$1, ENT_QUOTES, 'UTF-8') ?>",
             $source
@@ -299,10 +293,10 @@ class PlumeView
     /**
      * Gets the output of a template.
      *
-     * @param string $file   Template file
-     * @param array  $data   Template data
-     * @param string $layout Layout file
-     * @param bool   $escape When true (default), htmlspecialchars() all string vars before rendering
+     * @param string               $file   Template file
+     * @param array<string, mixed> $data   Template data
+     * @param string               $layout Layout file
+     * @param bool                 $escape When true (default), htmlspecialchars() all string vars before rendering
      *
      * @return string Output of template
      */

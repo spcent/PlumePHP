@@ -7,11 +7,11 @@ namespace Plume\Libs;
  */
 abstract class Action
 {
-    private $csrfToken = null;
-    private $csrfTokenKey = 'plume-csrf-token';
-    private $trueTokenKey = 'plume-csrf';
-    private $csrfHeaderKey = 'X-CSRF-TOKEN';
-    private $csrfPostKey = 'plume_csrf';
+    private ?string $csrfToken = null;
+    private string $csrfTokenKey = 'plume-csrf-token';
+    private string $trueTokenKey = 'plume-csrf';
+    private string $csrfHeaderKey = 'X-CSRF-TOKEN';
+    private string $csrfPostKey = 'plume_csrf';
 
     /**
      * Flag for called listener
@@ -25,9 +25,9 @@ abstract class Action
      * User parameters
      *
      * @access private
-     * @var array
+     * @var array<string, mixed>
      */
-    private $params = [];
+    private array $params = [];
     
     /**
      * Whether to enforce CSRF token validation for this action.
@@ -82,8 +82,10 @@ abstract class Action
         self::$customRules[$name] = $callback;
     }
 
-    protected $jsFiles = [];
-    protected $cssFiles = [];
+    /** @var string[] */
+    protected array $jsFiles = [];
+    /** @var string[] */
+    protected array $cssFiles = [];
 
     /**
      * Set an user defined parameter
@@ -129,12 +131,12 @@ abstract class Action
         return $default;
     }
 
-    public function addJs($jsFile)
+    public function addJs(string $jsFile): void
     {
         $this->jsFiles[] = $jsFile;
     }
 
-    public function addCss($cssFile)
+    public function addCss(string $cssFile): void
     {
         $this->cssFiles[] = $cssFile;
     }
@@ -158,7 +160,11 @@ abstract class Action
      * @param array       $data   Extra variables passed to the template
      * @param string|false $module Module name; defaults to the current module
      */
-    public function render($view, $layout = 'layout', $data = [], $module = false)
+    /**
+     * @param array<string, mixed> $data
+     * @param string|false         $module
+     */
+    public function render(string $view, string $layout = 'layout', array $data = [], mixed $module = false): void
     {
         if ($module === false) {
             $module = \PlumePHP::get('plumephp.module');
@@ -181,7 +187,7 @@ abstract class Action
     /**
      * Entry point called by the dispatcher; handles CSRF, validation, and lifecycle hooks.
      */
-    public function run()
+    public function run(): mixed
     {
         // Avoid infinite loop, a listener instance can be called only one time
         if ($this->called) {
@@ -205,7 +211,6 @@ abstract class Action
             if (!empty($errors)) {
                 $firstMsg = reset($errors);
                 $this->error((string) $firstMsg, 422, true);
-                return false;
             }
         }
 
@@ -417,17 +422,16 @@ abstract class Action
      * @param string $msg  Human-readable message
      * @param mixed  $data Response data payload
      */
-    public function json($code, $msg, $data)
+    public function json(int $code, string $msg, mixed $data): void
     {
         $res = ['code'=>$code, 'msg'=>$msg, 'data'=>$data];
         \PlumePHP::json($res, 200, true, 'utf-8', JSON_UNESCAPED_UNICODE);
     }
 
     /**
-     * @param array $ret
-     * @param string $msg
+     * @param array<mixed> $ret
      */
-    public function correct($ret = [], $msg = 'success')
+    public function correct(array $ret = [], string $msg = 'success'): void
     {
         $this->json(0, $msg, $ret);
     }
@@ -438,7 +442,7 @@ abstract class Action
      * @param int    $code Error code (default 1)
      * @param bool   $json Force JSON output even for non-AJAX requests
      */
-    public function error($msg = "Data error", $code = 1, $json = false)
+    public function error(string $msg = "Data error", int $code = 1, bool $json = false): never
     {
         if (!$json && !IS_AJAX) {
             $escapedMsg = htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -467,10 +471,10 @@ EOF;
     }
 
     /**
-     * @param null $key
+     * @param string|null $key
      * @return mixed
      */
-    public function getCookie($key = null)
+    public function getCookie(?string $key = null)
     {
         if ($key) {
             return isset($_COOKIE[$key]) ? $_COOKIE[$key] : null;
@@ -487,7 +491,7 @@ EOF;
      * @param string $path   Cookie path
      * @param string $domain Cookie domain
      */
-    public function setCookie($key, $value, $expire = 86400, $path = '/', $domain = '')
+    public function setCookie(string $key, string $value, int $expire = 86400, string $path = '/', string $domain = ''): void
     {
         setcookie($key, $value, time() + $expire, $path, $domain);
     }
@@ -503,9 +507,9 @@ EOF;
             $this->csrfToken = $this->createCsrfCookie($trueToken);
             $trueKey = $this->trueTokenKey;
             $csrfKey = $this->csrfTokenKey;
-            $payload = json_encode([$trueKey, $trueToken]);
+            $payload = (string) json_encode([$trueKey, $trueToken]);
             $this->setCookie($trueKey, $this->hashData($payload, $this->getCsrfKey()));
-            $this->setCookie($csrfKey, $this->csrfToken);
+            $this->setCookie($csrfKey, $this->csrfToken ?? '');
         }
         return $this->csrfToken;
     }
@@ -535,17 +539,13 @@ EOF;
         return $secret;
     }
 
-    /**
-     * @param $token
-     * @return string
-     */
-    private function createCsrfCookie($token)
+    private function createCsrfCookie(string $token): string
     {
         $mask = random_bytes(8);
         return str_replace('+', '.', base64_encode($mask . $this->xorTokens($token, $mask)));
     }
 
-    private function xorTokens($token1, $token2)
+    private function xorTokens(string $token1, string $token2): string
     {
         $n1 = mb_strlen($token1, '8bit');
         $n2 = mb_strlen($token2, '8bit');
@@ -573,7 +573,7 @@ EOF;
      */
     private function generateCsrf(int $len = 32): string
     {
-        return substr(bin2hex(random_bytes($len)), 0, $len);
+        return substr(bin2hex(random_bytes(max(1, $len))), 0, $len);
     }
 
     /**
@@ -632,11 +632,12 @@ EOF;
         return $token === $trueToken;
     }
 
-    protected function beforeRun()
+    protected function beforeRun(): bool
     {
         return true;
     }
-    protected function afterRun($result)
+
+    protected function afterRun(mixed $result): mixed
     {
         return $result;
     }

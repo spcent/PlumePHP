@@ -2,19 +2,26 @@
 
 declare(strict_types=1);
 
+/**
+ * @implements \ArrayAccess<array-key, mixed>
+ * @implements \Iterator<array-key, mixed>
+ */
 class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSerializable
 {
     /**
      * Collection data.
      *
-     * @var array
+     * @var array<array-key, mixed>
      */
-    private $data;
+    private array $data;
 
     /**
      * Constructor.
      *
      * @param array $data Initial data
+     */
+    /**
+     * @param array<array-key, mixed> $data
      */
     public function __construct(array $data = [])
     {
@@ -28,7 +35,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @return mixed Value
      */
-    public function __get($key)
+    public function __get(mixed $key): mixed
     {
         return isset($this->data[$key]) ? $this->data[$key] : null;
     }
@@ -39,7 +46,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      * @param string $key   Key
      * @param mixed  $value Value
      */
-    public function __set($key, $value)
+    public function __set(mixed $key, mixed $value): void
     {
         $this->data[$key] = $value;
     }
@@ -51,7 +58,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @return bool Item status
      */
-    public function __isset($key)
+    public function __isset(mixed $key): bool
     {
         return isset($this->data[$key]);
     }
@@ -61,7 +68,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @param string $key Key
      */
-    public function __unset($key)
+    public function __unset(mixed $key): void
     {
         unset($this->data[$key]);
     }
@@ -178,7 +185,8 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @return array Collection keys
      */
-    public function keys()
+    /** @return list<array-key> */
+    public function keys(): array
     {
         return array_keys($this->data);
     }
@@ -186,9 +194,9 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
     /**
      * Gets the collection data.
      *
-     * @return array Collection data
+     * @return array<array-key, mixed> Collection data
      */
-    public function getData()
+    public function getData(): array
     {
         return $this->data;
     }
@@ -196,9 +204,9 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
     /**
      * Sets the collection data.
      *
-     * @param array $data New collection data
+     * @param array<array-key, mixed> $data New collection data
      */
-    public function setData(array $data)
+    public function setData(array $data): void
     {
         $this->data = $data;
     }
@@ -208,6 +216,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
      *
      * @return array Collection data which can be serialized by <b>json_encode</b>
      */
+    /** @return array<array-key, mixed> */
     public function jsonSerialize(): mixed
     {
         return $this->data;
@@ -224,6 +233,7 @@ class PlumeCollection implements \ArrayAccess, \Iterator, \Countable, \JsonSeria
     /**
      * Transfers to the array.
      */
+    /** @return array<array-key, mixed> */
     public function toArray(): array
     {
         $collection = $this->data;

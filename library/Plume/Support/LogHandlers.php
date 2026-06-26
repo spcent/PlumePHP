@@ -56,7 +56,7 @@ class PlumeLogHandlers
                 $text .= '**Context:** `' . json_encode($context, JSON_UNESCAPED_UNICODE) . "`  \n";
             }
 
-            $payload = json_encode([
+            $payload = (string) json_encode([
                 'msgtype'  => 'markdown',
                 'markdown' => ['title' => $title, 'text' => $text],
                 'at'       => ['atMobiles' => $atMobiles, 'isAtAll' => false],
@@ -87,12 +87,12 @@ class PlumeLogHandlers
             }
 
             $projectId = ltrim($parts['path'] ?? '', '/');
-            $endpoint  = $parts['scheme'] . '://' . $parts['host'] . '/api/' . $projectId . '/store/';
+            $endpoint  = ($parts['scheme'] ?? 'https') . '://' . $parts['host'] . '/api/' . $projectId . '/store/';
             $authHeader = 'Sentry sentry_version=7'
                         . ', sentry_key=' . $parts['user']
                         . ', sentry_client=plumephp/1.0';
 
-            $envelope = json_encode([
+            $envelope = (string) json_encode([
                 'event_id'   => str_replace('-', '', sprintf('%04x%04x-%04x-%04x-%04x-%012x',
                     random_int(0, 0xffff), random_int(0, 0xffff),
                     random_int(0, 0xffff),

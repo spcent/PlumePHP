@@ -66,9 +66,9 @@ class PlumeJsonMapper
      * Override class names that JsonMapper uses to create objects.
      * Useful when your setter methods accept abstract classes or interfaces.
      *
-     * @var array
+     * @var array<string, string>
      */
-    public $classMap = [];
+    public array $classMap = [];
 
     /**
      * Callback used when an undefined property is found.
@@ -97,15 +97,15 @@ class PlumeJsonMapper
      * Runtime cache for inspected classes. This is particularly effective if
      * mapArray() is called with a large number of objects
      *
-     * @var array property inspection result cache
+     * @var array<string, mixed> property inspection result cache
      */
-    protected $arInspectedClasses = [];
+    protected array $arInspectedClasses = [];
 
     /**
      * Map data all data in $json into the given $object instance.
      *
-     * @param array|object $json   JSON object structure from json_decode()
-     * @param object       $object Object to map $json data into
+     * @param array<string, mixed>|object $json   JSON object structure from json_decode()
+     * @param object                      $object Object to map $json data into
      * @return mixed Mapped object is returned.
      * @see    mapArray()
      */
@@ -129,7 +129,8 @@ class PlumeJsonMapper
         $rc = new ReflectionClass($object);
         $strNs = $rc->getNamespaceName();
         $providedProperties = [];
-        foreach ($json as $key => $jvalue) {
+        $jsonIterable = is_object($json) ? get_object_vars($json) : $json;
+        foreach ($jsonIterable as $key => $jvalue) {
             $key = $this->getSafeName($key);
             $providedProperties[$key] = true;
 
@@ -254,7 +255,7 @@ class PlumeJsonMapper
                     );
                 }
 
-                $cleanSubtype = $this->removeNullable($subtype);
+                $cleanSubtype = $this->removeNullable($subtype) ?? '';
                 $subtype = $this->getFullNamespace($cleanSubtype, $strNs);
                 $child = $this->mapArray($jvalue, $array, $subtype, $key);
             } elseif ($this->isFlatType(gettype($jvalue))) {
@@ -298,7 +299,7 @@ class PlumeJsonMapper
     /**
      * Map an array
      *
-     * @param array  $json       JSON array structure from json_decode()
+     * @param array<mixed>  $json       JSON array structure from json_decode()
      * @param mixed  $array      Array or ArrayObject that gets filled with
      *                           data from $json
      * @param string $class      Class name for children objects.
@@ -387,8 +388,8 @@ class PlumeJsonMapper
     /**
      * Check required properties exist in json
      *
-     * @param array           $providedProperties array with json properties
-     * @param ReflectionClass $rc                 Reflection class to check
+     * @param array<string, mixed>   $providedProperties array with json properties
+     * @param ReflectionClass<object> $rc                Reflection class to check
      * @throws Exception
      * @return void
      */
@@ -397,7 +398,7 @@ class PlumeJsonMapper
         foreach ($rc->getProperties() as $property) {
             $rprop = $rc->getProperty($property->name);
             $docblock = $rprop->getDocComment();
-            $annotations = static::parseAnnotations($docblock);
+            $annotations = static::parseAnnotations($docblock ?: '');
             if (isset($annotations['required'])
                 && !isset($providedProperties[$property->name])
             ) {
@@ -416,8 +417,8 @@ class PlumeJsonMapper
      * This is to avoid confusion between those that were actually passed
      * as NULL, and those that weren't provided at all.
      *
-     * @param object $object             Object to remove properties from
-     * @param array  $providedProperties Array with JSON properties
+     * @param object               $object             Object to remove properties from
+     * @param array<string, mixed> $providedProperties Array with JSON properties
      * @return void
      */
     protected function removeUndefinedAttributes($object, $providedProperties)
@@ -433,13 +434,9 @@ class PlumeJsonMapper
      * Try to find out if a property exists in a given class.
      * Checks property first, falls back to setter method.
      *
-     * @param ReflectionClass $rc   Reflection class to check
-     * @param string          $name Property name
-     * @return array First value: if the property exists
-     *               Second value: the accessor to use (
-     *                 ReflectionMethod or ReflectionProperty, or null)
-     *               Third value: type of the property
-     *               Fourth value: if the property is nullable
+     * @param ReflectionClass<object> $rc   Reflection class to check
+     * @param string                  $name Property name
+     * @return array{bool, ReflectionMethod|ReflectionProperty|null, string|null, bool}
      */
     protected function inspectProperty(ReflectionClass $rc, $name)
     {
@@ -471,7 +468,7 @@ class PlumeJsonMapper
                 }
 
                 $docblock = $rmeth->getDocComment();
-                $annotations = static::parseAnnotations($docblock);
+                $annotations = static::parseAnnotations($docblock ?: '');
 
                 if (!isset($annotations['param'][0])) {
                     return [true, $rmeth, null, $isNullable];
@@ -514,7 +511,7 @@ class PlumeJsonMapper
         }
 
         $docblock = $rprop->getDocComment();
-        $annotations = static::parseAnnotations($docblock);
+        $annotations = static::parseAnnotations($docblock ?: '');
         if (!isset($annotations['var'][0])) {
             // If there is no annotations (higher priority) inspect
             // if there's a scalar type being defined
@@ -586,9 +583,9 @@ class PlumeJsonMapper
      * Checks if the setter or the property are public are made before
      * calling this method.
      *
-     * @param object $object   Object to set property on
-     * @param object $accessor ReflectionMethod or ReflectionProperty
-     * @param mixed  $value    Value of property
+     * @param object                            $object   Object to set property on
+     * @param ReflectionMethod|ReflectionProperty $accessor ReflectionMethod or ReflectionProperty
+     * @param mixed                             $value    Value of property
      * @return void
      */
     protected function setProperty(
@@ -626,6 +623,9 @@ class PlumeJsonMapper
         if ($useParameter) {
             return new $class($jvalue);
         }
+        if (!class_exists($class)) {
+            throw new \InvalidArgumentException("Class {$class} does not exist");
+        }
         $reflectClass = new ReflectionClass($class);
         $constructor = $reflectClass->getConstructor();
         if (null === $constructor
@@ -641,12 +641,15 @@ class PlumeJsonMapper
      * Get the mapped class/type name for this class.
      * Returns the incoming classname if not mapped.
      *
-     * @param string $type   Type name to map
-     * @param mixed  $jvalue Constructor parameter (the json value)
-     * @return string The mapped type/class name
+     * @param string|null $type   Type name to map
+     * @param mixed       $jvalue Constructor parameter (the json value)
+     * @return string|null The mapped type/class name
      */
-    protected function getMappedType(string $type, $jvalue = null)
+    protected function getMappedType(?string $type, $jvalue = null): ?string
     {
+        if ($type === null) {
+            return null;
+        }
         if (isset($this->classMap[$type])) {
             $target = $this->classMap[$type];
         } elseif (is_string($type) && '' !== $type && '\\' === $type[0]
@@ -762,7 +765,7 @@ class PlumeJsonMapper
      * Copied from PHPUnit 3.7.29, Util/Test.php
      *
      * @param string $docblock Full method docblock
-     * @return array Array of arrays.
+     * @return array<string, list<string>> Array of arrays.
      *               Key is the "@"-name like "param",
      *               each value is an array of the rest of the @-lines
      */

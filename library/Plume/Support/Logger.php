@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 class PlumeLogger implements \Psr\Log\LoggerInterface
 {
+    /** @var string[] */
     protected array $log = [];
 
-    /** @var array<callable(string $level, string $message, array $context): void> */
+    /** @var array<callable(string $level, string $message, array<string, mixed> $context): void> */
     private array $handlers = [];
 
     /**
@@ -24,7 +25,7 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
      */
     private string $mode = 'normal';
 
-    /** Buffered wf entries when mode=batch */
+    /** @var string[] Buffered wf entries when mode=batch */
     private array $wfLog = [];
 
     public function __construct(
@@ -83,6 +84,8 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
 
     /**
      * Format a log entry based on the configured formatter.
+     *
+     * @param array<string, mixed> $context
      */
     private function formatEntry(string $msg, string $level, array $context = []): string
     {
@@ -101,11 +104,11 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
     /**
      * Write log.
      *
-     * @param string $msg     log message
-     * @param array  $context Replaces the placeholder in the record information
-     *                        with context information, which is empty by default
-     * @param string $level   Log level
-     * @param bool   $wf      Whether to record in the separate wf file
+     * @param string               $msg     log message
+     * @param array<string, mixed> $context Replaces the placeholder in the record information
+     *                                      with context information, which is empty by default
+     * @param string               $level   Log level
+     * @param bool                 $wf      Whether to record in the separate wf file
      */
     public function write(\Stringable|string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false): void
     {
@@ -181,9 +184,7 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
     /**
      * Fatal log.
      *
-     * @param string $msg     Log message
-     * @param array  $context Replaces the placeholder in the record information
-     *                        with context information, which is empty by default
+     * @param array<string, mixed> $context
      */
     public function fatal(\Stringable|string $msg, array $context = []): void
     {
@@ -215,7 +216,11 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
         $this->write($message, $context, 'WARNING', true);
     }
 
-    /** Alias for warning() for backwards compatibility. */
+    /**
+     * Alias for warning() for backwards compatibility.
+     *
+     * @param array<string, mixed> $context
+     */
     public function warn(\Stringable|string $msg, array $context = []): void
     {
         $this->warning($msg, $context);
@@ -254,6 +259,9 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
         };
     }
 
+    /**
+     * @param array<string, mixed> $context
+     */
     public function sql(\Stringable|string $msg, array $context = []): void
     {
         $this->write($msg, $context, 'SQL');

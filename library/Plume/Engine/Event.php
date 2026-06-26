@@ -4,19 +4,11 @@ declare(strict_types=1);
 
 class PlumeEvent
 {
-    /**
-     * Mapped events.
-     *
-     * @var array
-     */
-    protected $events = [];
+    /** @var array<string, mixed> Mapped events */
+    protected array $events = [];
 
-    /**
-     * Method filters.
-     *
-     * @var array
-     */
-    protected $filters = [];
+    /** @var array<string, array<string, mixed[]>> Method filters */
+    protected array $filters = [];
 
     /**
      * Dispatches an event.
@@ -28,7 +20,10 @@ class PlumeEvent
      *
      * @return string Output of callback
      */
-    public function run(string $name, array $params = [])
+    /**
+     * @param mixed[] $params
+     */
+    public function run(string $name, array $params = []): mixed
     {
         $output = '';
 
@@ -51,10 +46,10 @@ class PlumeEvent
     /**
      * Assigns a callback to an event.
      *
-     * @param string   $name     Event name
-     * @param callable $callback Callback function
+     * @param string $name     Event name
+     * @param mixed  $callback Callback function
      */
-    public function set(string $name, $callback)
+    public function set(string $name, mixed $callback): void
     {
         $this->events[$name] = $callback;
     }
@@ -66,9 +61,10 @@ class PlumeEvent
      *
      * @return callable|null Callback function
      */
-    public function get(string $name): mixed
+    public function get(string $name): callable|null
     {
-        return $this->events[$name] ?? null;
+        $cb = $this->events[$name] ?? null;
+        return is_callable($cb) ? $cb : null;
     }
 
     /**
@@ -106,7 +102,7 @@ class PlumeEvent
      * @param string   $type     Filter type
      * @param callable $callback Callback function
      */
-    public function hook(string $name, string $type, $callback)
+    public function hook(string $name, string $type, mixed $callback): void
     {
         $this->filters[$name][$type][] = $callback;
     }
@@ -120,7 +116,11 @@ class PlumeEvent
      *
      * @throws \Exception
      */
-    public function filter(array $filters, array &$params, &$output)
+    /**
+     * @param callable[] $filters
+     * @param mixed[]    $params
+     */
+    public function filter(array $filters, array &$params, mixed &$output): void
     {
         $args = [&$params, &$output];
         foreach ($filters as $callback) {
@@ -141,7 +141,10 @@ class PlumeEvent
      *
      * @return mixed Function results
      */
-    public function execute($callback, array &$params = [])
+    /**
+     * @param mixed[] $params
+     */
+    public function execute(mixed $callback, array &$params = []): mixed
     {
         if (is_array($callback) && is_string($callback[0]) && isset($callback[1])) {
             $classname = $callback[0];
@@ -168,12 +171,12 @@ class PlumeEvent
     /**
      * Calls a function.
      *
-     * @param string $func   Name of function to call
-     * @param array  $params Function parameters
+     * @param callable $func   Callable to invoke
+     * @param mixed[]  $params Function parameters
      *
      * @return mixed Function results
      */
-    public static function callFunction($func, array &$params = [])
+    public static function callFunction(callable $func, array &$params = []): mixed
     {
         return $func(...$params);
     }
@@ -186,9 +189,12 @@ class PlumeEvent
      *
      * @return mixed Function results
      */
-    public static function invokeMethod($func, array &$params = [])
+    /**
+     * @param mixed[] $params
+     */
+    public static function invokeMethod(mixed $func, array &$params = []): mixed
     {
-        list($class, $method) = $func;
+        [$class, $method] = (array) $func;
 
         $instance = is_object($class);
         if (!$instance && method_exists($class, $method)) {
@@ -214,7 +220,7 @@ class PlumeEvent
     /**
      * Resets the object to the initial state.
      */
-    public function reset()
+    public function reset(): void
     {
         $this->events = [];
         $this->filters = [];
