@@ -120,7 +120,7 @@ function C($key, $value = null)
  * @param string $path file path
  * @param bool   $once Whether to use include_once, the default is false
  *
- * @return
+ * @return void
  */
 function I(string $path, bool $once = false)
 {

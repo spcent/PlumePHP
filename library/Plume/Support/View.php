@@ -33,13 +33,6 @@ class PlumeView
     protected $vars = [];
 
     /**
-     * Template file.
-     *
-     * @var string
-     */
-    private $template;
-
-    /**
      * Resolved content path (set during render).
      */
     private string $content = '';
@@ -383,13 +376,12 @@ class PlumeView
     }
 
     /**
-     * Displays escaped output.
+     * Echoes an HTML-escaped string.
      *
-     * @param string $str String to escape
-     *
-     * @return string Escaped string
+     * @param string $str String to escape and echo
+     * @return void
      */
-    public function e(string $str)
+    public function e(string $str): void
     {
         echo htmlspecialchars($str, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }

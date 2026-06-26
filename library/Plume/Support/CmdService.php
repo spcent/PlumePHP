@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+/** @phpstan-consistent-constructor */
 class PlumeCmdService
 {
     public $options = [

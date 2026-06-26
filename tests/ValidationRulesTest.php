@@ -282,7 +282,7 @@ class ValidationRulesTest extends \PHPUnit\Framework\TestCase
         );
         $errors = $action->validate();
         $this->assertCount(1, $errors);
-        $this->assertStringContainsString('不能为空', $errors['age']);
+        $this->assertStringContainsString('is required', $errors['age']);
     }
 
     // ---------------------------------------------------------------------------

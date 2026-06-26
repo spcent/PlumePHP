@@ -4,6 +4,23 @@ declare(strict_types=1);
 
 /**
  * The plume engine.
+ *
+ * @method PlumeRequest  request(bool $shared = true)
+ * @method PlumeResponse response(bool $shared = true)
+ * @method PlumeView     view(bool $shared = true)
+ * @method PlumeRouter   router(bool $shared = true)
+ * @method PlumeLogger   logger(bool $shared = true)
+ * @method void          start()
+ * @method void          stop(?int $code = null)
+ * @method void          route(string $pattern, callable $callback, bool $pass_route = false)
+ * @method never         halt(int $code = 200, string $message = '')
+ * @method void          error(\Throwable $e)
+ * @method void          notFound()
+ * @method void          render(string $file, ?array $data = null, ?string $key = null, string $layout = '')
+ * @method void          json(mixed $data, int $code = 200, bool $encode = true, string $charset = 'utf-8', int $option = JSON_UNESCAPED_UNICODE)
+ * @method void          jsonp(mixed $data, string $param = 'jsonp', int $code = 200, bool $encode = true, string $charset = 'utf-8', int $option = JSON_UNESCAPED_UNICODE)
+ * @method void          log(string $msg, array $context = [], string $level = 'DEBUG', bool $wf = false)
+ * @method mixed         biz(array $params = [])
  */
 class PlumeEngine
 {
@@ -129,7 +146,9 @@ class PlumeEngine
             // Enable error handling
             if ($self->get('plumephp.handle_errors')) {
                 set_error_handler([$self, 'handleError']);
-                set_exception_handler([$self, 'handleException']);
+                set_exception_handler(function (\Throwable $e) use ($self): void {
+                    $self->handleException($e);
+                });
             }
             // Set case-sensitivity
             $self->router()->case_sensitive = $self->get('plumephp.case_sensitive');
@@ -186,7 +205,7 @@ class PlumeEngine
     /**
      * Custom exception handler. Logs exceptions.
      *
-     * @param \Exception $e Thrown exception
+     * @param \Throwable $e Thrown exception
      */
     public function handleException($e)
     {
@@ -200,7 +219,7 @@ class PlumeEngine
      * Maps a callback to a framework method.
      *
      * @param string   $name     Method name
-     * @param callback $callback Callback function
+     * @param callable $callback Callback function
      *
      * @throws \Exception If trying to map over a framework method
      */
@@ -215,10 +234,10 @@ class PlumeEngine
     /**
      * Registers a class to a framework method.
      *
-     * @param string   $name     Method name
-     * @param string   $class    Class name
-     * @param array    $params   Class initialization parameters
-     * @param callback $callback Function to call after object instantiation
+     * @param string        $name     Method name
+     * @param string        $class    Class name
+     * @param array         $params   Class initialization parameters
+     * @param callable|null $callback Function to call after object instantiation
      *
      * @throws \Exception If trying to map over a framework method
      */
@@ -235,7 +254,7 @@ class PlumeEngine
      * Adds a pre-filter to a method.
      *
      * @param string   $name     Method name
-     * @param callback $callback Callback function
+     * @param callable $callback Callback function
      */
     public function before(string $name, $callback)
     {
@@ -246,7 +265,7 @@ class PlumeEngine
      * Adds a post-filter to a method.
      *
      * @param string   $name     Method name
-     * @param callback $callback Callback function
+     * @param callable $callback Callback function
      */
     public function after(string $name, $callback)
     {
@@ -272,8 +291,8 @@ class PlumeEngine
     /**
      * Sets a variable.
      *
-     * @param mixed  $key   Key
-     * @param string $value Value
+     * @param mixed $key   Key
+     * @param mixed $value Value
      */
     public function set($key, $value = null)
     {
@@ -463,7 +482,7 @@ class PlumeEngine
      * Routes a URL to a callback function.
      *
      * @param string   $pattern    URL pattern to match
-     * @param callback $callback   Callback function
+     * @param callable $callback   Callback function
      * @param bool     $pass_route Pass the matching route object to the callback
      */
     public function _route(string $pattern, callable $callback, bool $pass_route = false)
@@ -490,6 +509,7 @@ class PlumeEngine
      *
      * @param int    $code    HTTP status code
      * @param string $message Response message
+     * @return never
      */
     public function _halt(int $code = 200, string $message = '')
     {
@@ -652,12 +672,13 @@ class PlumeEngine
         $startTime = microtime(true);
         $ar = new PlumeParam($params);
         L('[biz]request: '.$ar);
-        if (!$ar->has('path') || !$ar->path) {
+        $bizPathRaw = $ar->getValue('path');
+        if (!$ar->has('path') || !$bizPathRaw) {
             throw new \Exception('Wrong parameter format, missing path');
         }
 
         // Special character processing
-        $bizPath = str_replace('..', '', $ar->path);
+        $bizPath = str_replace('..', '', $bizPathRaw);
         $bizPath = str_replace('/', '', $bizPath);
         $bizPath = str_replace('\\', '', $bizPath);
         $names = explode('.', $bizPath, 20);

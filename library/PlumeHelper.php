@@ -261,6 +261,7 @@ class PlumeHelper
         $key        = md5($key ?: 'plumephp');
         $keya       = md5(substr($key, 0, 16));
         $keyb       = md5(substr($key, 16, 16));
+        // @phpstan-ignore-next-line ($ckeyLength is intentionally a constant 4 here)
         $keyc       = $ckeyLength
             ? ($operation == 'DECODE' ? substr($string, 0, $ckeyLength) : substr(md5(microtime()), -$ckeyLength))
             : '';
@@ -450,8 +451,9 @@ class PlumeHelper
         $array = debug_backtrace();
         $html  = '';
         foreach ($array as $row) {
+            // @phpstan-ignore-next-line (isset on 'function' is always true but used with optional keys for brevity)
             if (isset($row['file'], $row['line'], $row['function'])) {
-                $html .= '<p>' . $row['file'] . ':' . $row['line'] . '行,调用方法:' . $row['function'] . '</p>';
+                $html .= '<p>' . $row['file'] . ':' . $row['line'] . ' call: ' . $row['function'] . '</p>';
             }
         }
         if ($isEcho) {

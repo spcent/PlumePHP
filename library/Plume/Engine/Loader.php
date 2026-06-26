@@ -44,7 +44,7 @@ class PlumeLoader
      * @param string          $name     Registry name
      * @param callable|string $class    Class name or function to instantiate class
      * @param array           $params   Class initialization parameters
-     * @param callback        $callback Function to call after object instantiation
+     * @param callable|null   $callback Function to call after object instantiation
      */
     public function register(string $name, $class, array $params = [], ?callable $callback = null)
     {

@@ -387,8 +387,8 @@ class PlumeJsonMapper
     /**
      * Check required properties exist in json
      *
-     * @param array  $providedProperties array with json properties
-     * @param object $rc                 Reflection class to check
+     * @param array           $providedProperties array with json properties
+     * @param ReflectionClass $rc                 Reflection class to check
      * @throws Exception
      * @return void
      */
@@ -453,13 +453,9 @@ class PlumeJsonMapper
                 if (count($rparams) > 0) {
                     $isNullable = $rparams[0]->allowsNull();
                     $ptype = $rparams[0]->getType();
-                    if (null !== $ptype) {
-                        if ($ptype instanceof ReflectionNamedType) {
-                            $typeName = $ptype->getName();
-                        }
-                        if ($ptype instanceof ReflectionUnionType
-                            || !$ptype->isBuiltin()
-                        ) {
+                    if ($ptype instanceof ReflectionNamedType) {
+                        $typeName = $ptype->getName();
+                        if (!$ptype->isBuiltin()) {
                             $typeName = '\\' . $typeName;
                         }
                         //allow overriding an "array" type hint
@@ -524,6 +520,9 @@ class PlumeJsonMapper
             // if there's a scalar type being defined
             if (PHP_VERSION_ID >= 70400 && $rprop->hasType()) {
                 $rPropType = $rprop->getType();
+                if (!$rPropType instanceof \ReflectionNamedType) {
+                    return [true, $rprop, null, false];
+                }
                 $propTypeName = $rPropType->getName();
                 if ($this->isSimpleType($propTypeName)) {
                     return [

@@ -19,6 +19,7 @@ parameters:
     excludePaths:
         - library/vendor/*
         - library/core/Plume/Libs/Medoo.php
+        - library/core/Plume/Libs/JsonRpcServer.php
 
     # PlumeViewObject is an application-level class injected at runtime;
     # the framework cannot declare it statically.

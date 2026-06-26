@@ -177,9 +177,9 @@ class PlumeRouter
     }
 
     /**
-     * Gets the next route.
+     * Advances the route pointer to the next route.
      *
-     * @return PlumeRoute
+     * @return void
      */
     public function next()
     {

@@ -20,9 +20,6 @@ class ActionResolver
         // Strip virtual-directory prefix
         if ($vdname !== '') {
             $urlPath = substr($requestUri, strlen('/' . $vdname));
-            if ($urlPath === false) {
-                $urlPath = $requestUri;
-            }
         } else {
             $urlPath = $requestUri;
         }

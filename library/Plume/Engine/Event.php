@@ -52,7 +52,7 @@ class PlumeEvent
      * Assigns a callback to an event.
      *
      * @param string   $name     Event name
-     * @param callback $callback Callback function
+     * @param callable $callback Callback function
      */
     public function set(string $name, $callback)
     {
@@ -64,7 +64,7 @@ class PlumeEvent
      *
      * @param string $name Event name
      *
-     * @return callback $callback Callback function
+     * @return callable|null Callback function
      */
     public function get(string $name): mixed
     {
@@ -104,7 +104,7 @@ class PlumeEvent
      *
      * @param string   $name     Event name
      * @param string   $type     Filter type
-     * @param callback $callback Callback function
+     * @param callable $callback Callback function
      */
     public function hook(string $name, string $type, $callback)
     {
@@ -134,8 +134,8 @@ class PlumeEvent
     /**
      * Executes a callback function.
      *
-     * @param callback $callback Callback function
-     * @param array    $params   Function parameters
+     * @param mixed $callback Callback function
+     * @param array $params   Function parameters
      *
      * @throws \Exception
      *
