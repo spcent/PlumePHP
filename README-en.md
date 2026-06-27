@@ -518,6 +518,131 @@ frankenphp php-server --worker public/worker.php --root public/
 
 ---
 
+## Production Deployment (Caddy)
+
+PlumePHP supports two Caddy deployment modes — choose the one that fits your environment.
+
+### Option 1: FrankenPHP + Worker Mode (Recommended)
+
+FrankenPHP embeds PHP directly into Caddy. Combined with `worker.php`'s persistent-process loop, PHP starts only once and all requests reuse the same process — eliminating cold-start overhead for maximum throughput.
+
+**Caddyfile:**
+
+```caddyfile
+{
+    frankenphp
+    order php_server before file_server
+}
+
+yourdomain.com {
+    root * /var/www/PlumePHP/public
+
+    tls your@email.com
+
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    # Block direct access to internal framework directories
+    @blocked {
+        path /library/* /application/* /config/* /storage/* /vendor/* /tests/*
+    }
+    respond @blocked 403
+
+    # Serve static assets directly without involving PHP
+    @static {
+        path *.css *.js *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+    }
+    file_server @static
+
+    # PHP worker persistent-process mode
+    php_server {
+        worker worker.php
+    }
+}
+```
+
+**Launch commands:**
+
+```bash
+# Development (traditional mode — PHP restarts per request, no worker overhead)
+frankenphp php-server --root public/
+
+# Production (worker mode — persistent processes)
+frankenphp php-server --worker public/worker.php --root public/
+
+# Via Caddyfile
+frankenphp run --config /etc/caddy/Caddyfile
+```
+
+### Option 2: Caddy + PHP-FPM
+
+Suitable for environments that already run PHP-FPM, or when you prefer not to introduce FrankenPHP.
+
+**Caddyfile:**
+
+```caddyfile
+yourdomain.com {
+    root * /var/www/PlumePHP/public
+
+    tls your@email.com
+
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        -Server
+    }
+
+    # Block direct access to internal framework directories
+    @blocked {
+        path /library/* /application/* /config/* /storage/* /vendor/* /tests/*
+    }
+    respond @blocked 403
+
+    # Serve static assets directly without involving PHP
+    @static {
+        path *.css *.js *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+    }
+    file_server @static
+
+    # All other requests are dispatched through index.php
+    php_fastcgi unix//run/php/php8.2-fpm.sock {
+        index index.php
+        env HTTP_MOD_REWRITE On
+    }
+
+    file_server
+}
+```
+
+### Notes
+
+**Log directory permissions:**
+
+```bash
+mkdir -p storage/log
+chown -R www-data:www-data storage/
+chmod -R 755 storage/
+```
+
+**Sub-path deployment (virtual directory):** If the app is mounted under a sub-path (e.g. `/app`), set `'VDNAME' => 'app'` in `config/config.php` and add `uri strip_prefix /app` inside the corresponding route block in the Caddyfile.
+
+**Environment variables:** Database credentials and other config are best supplied via a `.env` file (built-in `PlumeDotEnv` support). In PHP-FPM mode they can also be injected through the `env` directive inside `php_fastcgi`.
+
+**Comparison:**
+
+| | FrankenPHP + worker.php | Caddy + PHP-FPM |
+|---|---|---|
+| PHP startup cost | Once (process persists) | Per request (depends on FPM config) |
+| Deployment complexity | Low (single binary) | Medium (two services) |
+| Best for | High concurrency, low latency | Stable, general-purpose |
+
+---
+
 ## Global Helper Functions
 
 | Function | Purpose |
