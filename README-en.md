@@ -1,40 +1,28 @@
-# What is PlumePHP?
+# PlumePHP — A Lightweight Single-File PHP Framework
 
-PlumePHP is a fast, simple, extensible framework for PHP. PlumePHP enables you to 
-quickly and easily build RESTful web applications.
+> PHP >= 8.1 · PSR-3 Logging · PSR-11 Container · PSR-15 Middleware · Apache-2.0
 
-```php
-require 'PlumePHP.php';
+---
 
-PlumePHP::route('/', function(){
-    echo 'hello world!';
-});
+## Quick Start
 
-PlumePHP::start();
+```bash
+# Built-in Web Server (development/testing, single-process)
+php -S localhost:8000 -t public/ public/index.php
+
+# With environment variable
+PLUME_PHP_ENV=testing php -S localhost:8000 -t public/ public/index.php
+
+# Via framework CLI (with built-in port-conflict detection)
+php public/index.php -S
+php public/index.php -S -H 0.0.0.0 -P 9000   # custom host and port
+php public/index.php -S -b                     # run in background
+
+# Run a CLI command
+php public/index.php -m web -c migrate
 ```
 
-[Learn more](http://plumephp.com/learn)
-
-# Requirements
-
-PlumePHP requires `PHP 7.1` or greater.
-
-# License
-
-PlumePHP is released under the [MIT](http://plumephp.com/license) license.
-
-# Installation
-
-1\. Download the files.
-
-If you're using [Composer](https://getcomposer.org/), you can run the following command:
-
-```
-composer require spcent/PlumePHP
-```
-
-OR you can [download](https://github.com/spcent/PlumePHP/archive/master.zip) them directly.
-and extract them to your web directory.
+> PHP's built-in server is single-process and handles one request at a time. Use it for development and testing only — not suitable for production.
 
 2\. Start a development server (no Apache/Nginx/PHP-FPM required).
 
@@ -62,18 +50,13 @@ php public/index.php -m web -c migrate
 
 3\. Configure your webserver (production).
 
-For *Apache*, edit your `.htaccess` file with the following:
+## Introduction
 
-```
-RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ index.php [QSA,L]
-```
+PlumePHP is a single-entry, minimal PHP framework designed for rapid development of small-to-medium systems. It ships with routing, templating, logging, database access, CSRF protection, and middleware out of the box, and supports FrankenPHP Worker persistent-process mode.
 
-**Note**: If you need to use PlumePHP in a subdirectory add the line `RewriteBase /subdir/` just after `RewriteEngine On`.
+---
 
-For *Nginx*, add the following to your server declaration:
+## Entry Point
 
 ```
 server {
@@ -93,849 +76,518 @@ require 'PlumePHP.php';
 If you're using Composer, run the autoloader instead.
 
 ```php
-require 'vendor/autoload.php';
-```
+// public/index.php
+include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-Then define a route and assign a function to handle the request.
-
-```php
-PlumePHP::route('/', function(){
-    echo 'hello world!';
+PlumePHP::route('GET /api', function () {
+    echo json_encode(['code' => 0, 'data' => 'api', 'msg' => 'success'], JSON_UNESCAPED_UNICODE);
 });
-```
 
-Finally, start the framework.
+PlumePHP::route('GET /', function () {
+    echo 'Hello World!';
+});
 
-```php
+// Catch-all: resolves /{module}/{controller}/{action} from the filesystem
+PlumePHP::route('*', function () {
+    PlumePHP::app()->runAction();
+});
+
 PlumePHP::start();
 ```
 
-# Routing
-
-Routing in PlumePHP is done by matching a URL pattern with a callback function.
+The `$app` instance style is equivalent and also supported:
 
 ```php
-PlumePHP::route('/', function(){
-    echo 'hello world!';
-});
-```
+include dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-The callback can be any object that is callable. So you can use a regular function:
+$app = PlumePHP::app();
 
-```php
-function hello(){
-    echo 'hello world!';
-}
-
-PlumePHP::route('/', 'hello');
-```
-
-Or a class method:
-
-```php
-class Greeting {
-    public static function hello() {
-        echo 'hello world!';
-    }
-}
-
-PlumePHP::route('/', array('Greeting', 'hello'));
-```
-
-Or an object method:
-
-```php
-class Greeting
-{
-    public function __construct() {
-        $this->name = 'John Doe';
-    }
-
-    public function hello() {
-        echo "Hello, {$this->name}!";
-    }
-}
-
-$greeting = new Greeting();
-
-PlumePHP::route('/', array($greeting, 'hello')); 
-```
-
-Routes are matched in the order they are defined. The first route to match a
-request will be invoked.
-
-## Method Routing
-
-By default, route patterns are matched against all request methods. You can respond
-to specific methods by placing an identifier before the URL.
-
-```php
-PlumePHP::route('GET /', function(){
-    echo 'I received a GET request.';
+$app->route('GET /api', function () {
+    echo json_encode(['code' => 0, 'data' => 'api', 'msg' => 'success'], JSON_UNESCAPED_UNICODE);
 });
 
-PlumePHP::route('POST /', function(){
-    echo 'I received a POST request.';
-});
-```
-
-You can also map multiple methods to a single callback by using a `|` delimiter:
-
-```php
-PlumePHP::route('GET|POST /', function(){
-    echo 'I received either a GET or a POST request.';
-});
-```
-
-## Regular Expressions
-
-You can use regular expressions in your routes:
-
-```php
-PlumePHP::route('/user/[0-9]+', function(){
-    // This will match /user/1234
-});
-```
-
-## Named Parameters
-
-You can specify named parameters in your routes which will be passed along to
-your callback function.
-
-```php
-PlumePHP::route('/@name/@id', function($name, $id){
-    echo "hello, $name ($id)!";
-});
-```
-
-You can also include regular expressions with your named parameters by using
-the `:` delimiter:
-
-```php
-PlumePHP::route('/@name/@id:[0-9]{3}', function($name, $id){
-    // This will match /bob/123
-    // But will not match /bob/12345
-});
-```
-
-## Optional Parameters
-
-You can specify named parameters that are optional for matching by wrapping
-segments in parentheses.
-
-```php
-PlumePHP::route('/blog(/@year(/@month(/@day)))', function($year, $month, $day){
-    // This will match the following URLS:
-    // /blog/2012/12/10
-    // /blog/2012/12
-    // /blog/2012
-    // /blog
-});
-```
-
-Any optional parameters that are not matched will be passed in as NULL.
-
-## Wildcards
-
-Matching is only done on individual URL segments. If you want to match multiple
-segments you can use the `*` wildcard.
-
-```php
-PlumePHP::route('/blog/*', function(){
-    // This will match /blog/2000/02/01
-});
-```
-
-To route all requests to a single callback, you can do:
-
-```php
-PlumePHP::route('*', function(){
-    // Do something
-});
-```
-
-## Passing
-
-You can pass execution on to the next matching route by returning `true` from
-your callback function.
-
-```php
-PlumePHP::route('/user/@name', function($name){
-    // Check some condition
-    if ($name != "Bob") {
-        // Continue to next route
-        return true;
-    }
-});
-
-PlumePHP::route('/user/*', function(){
-    // This will get called
-});
-```
-
-## Route Info
-
-If you want to inspect the matching route information, you can request for the route
-object to be passed to your callback by passing in `true` as the third parameter in
-the route method. The route object will always be the last parameter passed to your
-callback function.
-
-```php
-PlumePHP::route('/', function($route){
-    // Array of HTTP methods matched against
-    $route->methods;
-
-    // Array of named parameters
-    $route->params;
-
-    // Matching regular expression
-    $route->regex;
-
-    // Contains the contents of any '*' used in the URL pattern
-    $route->splat;
-}, true);
-```
-
-# Extending
-
-PlumePHP is designed to be an extensible framework. The framework comes with a set
-of default methods and components, but it allows you to map your own methods,
-register your own classes, or even override existing classes and methods.
-
-## Mapping Methods
-
-To map your own custom method, you use the `map` function:
-
-```php
-// Map your method
-PlumePHP::map('hello', function($name){
-    echo "hello $name!";
-});
-
-// Call your custom method
-PlumePHP::hello('Bob');
-```
-
-## Registering Classes
-
-To register your own class, you use the `register` function:
-
-```php
-// Register your class
-PlumePHP::register('user', 'User');
-
-// Get an instance of your class
-$user = PlumePHP::user();
-```
-
-The register method also allows you to pass along parameters to your class
-constructor. So when you load your custom class, it will come pre-initialized.
-You can define the constructor parameters by passing in an additional array.
-Here's an example of loading a database connection:
-
-```php
-// Register class with constructor parameters
-PlumePHP::register('db', 'PDO', array('mysql:host=localhost;dbname=test','user','pass'));
-
-// Get an instance of your class
-// This will create an object with the defined parameters
-//
-//     new PDO('mysql:host=localhost;dbname=test','user','pass');
-//
-$db = PlumePHP::db();
-```
-
-If you pass in an additional callback parameter, it will be executed immediately
-after class construction. This allows you to perform any set up procedures for your
-new object. The callback function takes one parameter, an instance of the new object.
-
-```php
-// The callback will be passed the object that was constructed
-PlumePHP::register('db', 'PDO', array('mysql:host=localhost;dbname=test','user','pass'), function($db){
-    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-});
-```
-
-By default, every time you load your class you will get a shared instance.
-To get a new instance of a class, simply pass in `false` as a parameter:
-
-```php
-// Shared instance of the class
-$shared = PlumePHP::db();
-
-// New instance of the class
-$new = PlumePHP::db(false);
-```
-
-Keep in mind that mapped methods have precedence over registered classes. If you
-declare both using the same name, only the mapped method will be invoked.
-
-# Overriding
-
-PlumePHP allows you to override its default functionality to suit your own needs,
-without having to modify any code.
-
-For example, when PlumePHP cannot match a URL to a route, it invokes the `notFound`
-method which sends a generic `HTTP 404` response. You can override this behavior
-by using the `map` method:
-
-```php
-PlumePHP::map('notFound', function(){
-    // Display custom 404 page
-    include 'errors/404.html';
-});
-```
-
-PlumePHP also allows you to replace core components of the framework.
-For example you can replace the default Router class with your own custom class:
-
-```php
-// Register your custom class
-PlumePHP::register('router', 'MyRouter');
-
-// When PlumePHP loads the Router instance, it will load your class
-$myrouter = PlumePHP::router();
-```
-
-Framework methods like `map` and `register` however cannot be overridden. You will
-get an error if you try to do so.
-
-# Filtering
-
-PlumePHP allows you to filter methods before and after they are called. There are no
-predefined hooks you need to memorize. You can filter any of the default framework
-methods as well as any custom methods that you've mapped.
-
-A filter function looks like this:
-
-```php
-function(&$params, &$output) {
-    // Filter code
-}
-```
-
-Using the passed in variables you can manipulate the input parameters and/or the output.
-
-You can have a filter run before a method by doing:
-
-```php
-PlumePHP::before('start', function(&$params, &$output){
-    // Do something
-});
-```
-
-You can have a filter run after a method by doing:
-
-```php
-PlumePHP::after('start', function(&$params, &$output){
-    // Do something
-});
-```
-
-You can add as many filters as you want to any method. They will be called in the
-order that they are declared.
-
-Here's an example of the filtering process:
-
-```php
-// Map a custom method
-PlumePHP::map('hello', function($name){
-    return "Hello, $name!";
-});
-
-// Add a before filter
-PlumePHP::before('hello', function(&$params, &$output){
-    // Manipulate the parameter
-    $params[0] = 'Fred';
-});
-
-// Add an after filter
-PlumePHP::after('hello', function(&$params, &$output){
-    // Manipulate the output
-    $output .= " Have a nice day!";
-});
-
-// Invoke the custom method
-echo PlumePHP::hello('Bob');
-```
-
-This should display:
-
-    Hello Fred! Have a nice day!
-
-If you have defined multiple filters, you can break the chain by returning `false`
-in any of your filter functions:
-
-```php
-PlumePHP::before('start', function(&$params, &$output){
-    echo 'one';
-});
-
-PlumePHP::before('start', function(&$params, &$output){
-    echo 'two';
-
-    // This will end the chain
-    return false;
-});
-
-// This will not get called
-PlumePHP::before('start', function(&$params, &$output){
-    echo 'three';
-});
-```
-
-Note, core methods such as `map` and `register` cannot be filtered because they
-are called directly and not invoked dynamically.
-
-# Variables
-
-PlumePHP allows you to save variables so that they can be used anywhere in your application.
-
-```php
-// Save your variable
-PlumePHP::set('id', 123);
-
-// Elsewhere in your application
-$id = PlumePHP::get('id');
-```
-To see if a variable has been set you can do:
-
-```php
-if (PlumePHP::has('id')) {
-     // Do something
-}
-```
-
-You can clear a variable by doing:
-
-```php
-// Clears the id variable
-PlumePHP::clear('id');
-
-// Clears all variables
-PlumePHP::clear();
-```
-
-PlumePHP also uses variables for configuration purposes.
-
-```php
-PlumePHP::set('PlumePHP.log_errors', true);
-```
-
-# Views
-
-PlumePHP provides some basic templating functionality by default. To display a view
-template call the `render` method with the name of the template file and optional
-template data:
-
-```php
-PlumePHP::render('hello.php', array('name' => 'Bob'));
-```
-
-The template data you pass in is automatically injected into the template and can
-be reference like a local variable. Template files are simply PHP files. If the
-content of the `hello.php` template file is:
-
-```php
-Hello, '<?php echo $name; ?>'!
-```
-
-The output would be:
-
-    Hello, Bob!
-
-You can also manually set view variables by using the set method:
-
-```php
-PlumePHP::view()->set('name', 'Bob');
-```
-
-The variable `name` is now available across all your views. So you can simply do:
-
-```php
-PlumePHP::render('hello');
-```
-
-Note that when specifying the name of the template in the render method, you can
-leave out the `.php` extension.
-
-By default PlumePHP will look for a `views` directory for template files. You can
-set an alternate path for your templates by setting the following config:
-
-```php
-PlumePHP::set('PlumePHP.views.path', '/path/to/views');
-```
-
-## Layouts
-
-It is common for websites to have a single layout template file with interchanging
-content. To render content to be used in a layout, you can pass in an optional
-parameter to the `render` method.
-
-```php
-PlumePHP::render('header', array('heading' => 'Hello'), 'header_content');
-PlumePHP::render('body', array('body' => 'World'), 'body_content');
-```
-
-Your view will then have saved variables called `header_content` and `body_content`.
-You can then render your layout by doing:
-
-```php
-PlumePHP::render('layout', array('title' => 'Home Page'));
-```
-
-If the template files looks like this:
-
-`header.php`:
-
-```php
-<h1><?php echo $heading; ?></h1>
-```
-
-`body.php`:
-
-```php
-<div><?php echo $body; ?></div>
-```
-
-`layout.php`:
-
-```php
-<html>
-<head>
-<title><?php echo $title; ?></title>
-</head>
-<body>
-<?php echo $header_content; ?>
-<?php echo $body_content; ?>
-</body>
-</html>
-```
-
-The output would be:
-```html
-<html>
-<head>
-<title>Home Page</title>
-</head>
-<body>
-<h1>Hello</h1>
-<div>World</div>
-</body>
-</html>
-```
-
-## Custom Views
-
-PlumePHP allows you to swap out the default view engine simply by registering your
-own view class. Here's how you would use the [Smarty](http://www.smarty.net/)
-template engine for your views:
-
-```php
-// Load Smarty library
-require './Smarty/libs/Smarty.class.php';
-
-// Register Smarty as the view class
-// Also pass a callback function to configure Smarty on load
-PlumePHP::register('view', 'Smarty', array(), function($smarty){
-    $smarty->template_dir = './templates/';
-    $smarty->compile_dir = './templates_c/';
-    $smarty->config_dir = './config/';
-    $smarty->cache_dir = './cache/';
-});
-
-// Assign template data
-PlumePHP::view()->assign('name', 'Bob');
-
-// Display the template
-PlumePHP::view()->display('hello.tpl');
-```
-
-For completeness, you should also override PlumePHP's default render method:
-
-```php
-PlumePHP::map('render', function($template, $data){
-    PlumePHP::view()->assign($data);
-    PlumePHP::view()->display($template);
-});
-```
-# Error Handling
-
-## Errors and Exceptions
-
-All errors and exceptions are caught by PlumePHP and passed to the `error` method.
-The default behavior is to send a generic `HTTP 500 Internal Server Error`
-response with some error information.
-
-You can override this behavior for your own needs:
-
-```php
-PlumePHP::map('error', function(Exception $ex){
-    // Handle error
-    echo $ex->getTraceAsString();
-});
-```
-
-By default errors are not logged to the web server. You can enable this by
-changing the config:
-
-```php
-PlumePHP::set('PlumePHP.log_errors', true);
-```
-
-## Not Found
-
-When a URL can't be found, PlumePHP calls the `notFound` method. The default
-behavior is to send an `HTTP 404 Not Found` response with a simple message.
-
-You can override this behavior for your own needs:
-
-```php
-PlumePHP::map('notFound', function(){
-    // Handle not found
-});
-```
-
-# Redirects
-
-You can redirect the current request by using the `redirect` method and passing
-in a new URL:
-
-```php
-PlumePHP::redirect('/new/location');
-```
-
-By default PlumePHP sends a HTTP 303 status code. You can optionally set a
-custom code:
-
-```php
-PlumePHP::redirect('/new/location', 401);
-```
-
-# Requests
-
-PlumePHP encapsulates the HTTP request into a single object, which can be
-accessed by doing:
-
-```php
-$request = PlumePHP::request();
-```
-
-The request object provides the following properties:
-
-```
-url - The URL being requested
-base - The parent subdirectory of the URL
-method - The request method (GET, POST, PUT, DELETE)
-referrer - The referrer URL
-ip - IP address of the client
-ajax - Whether the request is an AJAX request
-scheme - The server protocol (http, https)
-user_agent - Browser information
-type - The content type
-length - The content length
-query - Query string parameters
-data - Post data or JSON data
-cookies - Cookie data
-files - Uploaded files
-secure - Whether the connection is secure
-accept - HTTP accept parameters
-proxy_ip - Proxy IP address of the client
-```
-
-You can access the `query`, `data`, `cookies`, and `files` properties
-as arrays or objects.
-
-So, to get a query string parameter, you can do:
-
-```php
-$id = PlumePHP::request()->query['id'];
-```
-
-Or you can do:
-
-```php
-$id = PlumePHP::request()->query->id;
-```
-
-## RAW Request Body
-
-To get the raw HTTP request body, for example when dealing with PUT requests, you can do:
-
-```php
-$body = PlumePHP::request()->getBody();
-```
-
-## JSON Input
-
-If you send a request with the type `application/json` and the data `{"id": 123}` it will be available
-from the `data` property:
-
-```php
-$id = PlumePHP::request()->data->id;
-```
-
-# HTTP Caching
-
-PlumePHP provides built-in support for HTTP level caching. If the caching condition
-is met, PlumePHP will return an HTTP `304 Not Modified` response. The next time the
-client requests the same resource, they will be prompted to use their locally
-cached version.
-
-## Last-Modified
-
-You can use the `lastModified` method and pass in a UNIX timestamp to set the date
-and time a page was last modified. The client will continue to use their cache until
-the last modified value is changed.
-
-```php
-PlumePHP::route('/news', function(){
-    PlumePHP::lastModified(1234567890);
-    echo 'This content will be cached.';
-});
-```
-
-## ETag
-
-`ETag` caching is similar to `Last-Modified`, except you can specify any id you
-want for the resource:
-
-```php
-PlumePHP::route('/news', function(){
-    PlumePHP::etag('my-unique-id');
-    echo 'This content will be cached.';
-});
-```
-
-Keep in mind that calling either `lastModified` or `etag` will both set and check the
-cache value. If the cache value is the same between requests, PlumePHP will immediately
-send an `HTTP 304` response and stop processing.
-
-# Stopping
-
-You can stop the framework at any point by calling the `halt` method:
-
-```php
-PlumePHP::halt();
-```
-
-You can also specify an optional `HTTP` status code and message:
-
-```php
-PlumePHP::halt(200, 'Be right back...');
-```
-
-Calling `halt` will discard any response content up to that point. If you want to stop
-the framework and output the current response, use the `stop` method:
-
-```php
-PlumePHP::stop();
-```
-
-# JSON
-
-PlumePHP provides support for sending JSON and JSONP responses. To send a JSON response you
-pass some data to be JSON encoded:
-
-```php
-PlumePHP::json(array('id' => 123));
-```
-
-For JSONP requests you, can optionally pass in the query parameter name you are
-using to define your callback function:
-
-```php
-PlumePHP::jsonp(array('id' => 123), 'q');
-```
-
-So, when making a GET request using `?q=my_func`, you should receive the output:
-
-```
-my_func({"id":123});
-```
-
-If you don't pass in a query parameter name it will default to `jsonp`.
-
-
-# Configuration
-
-You can customize certain behaviors of PlumePHP by setting configuration values
-through the `set` method.
-
-```php
-PlumePHP::set('PlumePHP.log_errors', true);
-```
-
-The following is a list of all the available configuration settings:
-
-    PlumePHP.base_url - Override the base url of the request. (default: null)
-    PlumePHP.case_sensitive - Case sensitive matching for URLs. (default: false)
-    PlumePHP.handle_errors - Allow PlumePHP to handle all errors internally. (default: true)
-    PlumePHP.log_errors - Log errors to the web server's error log file. (default: false)
-    PlumePHP.views.path - Directory containing view template files. (default: ./views)
-    PlumePHP.views.extension - View template file extension. (default: .php)
-
-# Framework Methods
-
-PlumePHP is designed to be easy to use and understand. The following is the complete
-set of methods for the framework. It consists of core methods, which are regular
-static methods, and extensible methods, which are mapped methods that can be filtered
-or overridden.
-
-## Core Methods
-
-```php
-PlumePHP::map($name, $callback) // Creates a custom framework method.
-PlumePHP::register($name, $class, [$params], [$callback]) // Registers a class to a framework method.
-PlumePHP::before($name, $callback) // Adds a filter before a framework method.
-PlumePHP::after($name, $callback) // Adds a filter after a framework method.
-PlumePHP::path($path) // Adds a path for autoloading classes.
-PlumePHP::get($key) // Gets a variable.
-PlumePHP::set($key, $value) // Sets a variable.
-PlumePHP::has($key) // Checks if a variable is set.
-PlumePHP::clear([$key]) // Clears a variable.
-PlumePHP::init() // Initializes the framework to its default settings.
-PlumePHP::app() // Gets the application object instance
-```
-
-## Extensible Methods
-
-```php
-PlumePHP::start() // Starts the framework.
-PlumePHP::stop() // Stops the framework and sends a response.
-PlumePHP::halt([$code], [$message]) // Stop the framework with an optional status code and message.
-PlumePHP::route($pattern, $callback) // Maps a URL pattern to a callback.
-PlumePHP::redirect($url, [$code]) // Redirects to another URL.
-PlumePHP::render($file, [$data], [$key]) // Renders a template file.
-PlumePHP::error($exception) // Sends an HTTP 500 response.
-PlumePHP::notFound() // Sends an HTTP 404 response.
-PlumePHP::etag($id, [$type]) // Performs ETag HTTP caching.
-PlumePHP::lastModified($time) // Performs last modified HTTP caching.
-PlumePHP::json($data, [$code], [$encode], [$charset], [$option]) // Sends a JSON response.
-PlumePHP::jsonp($data, [$param], [$code], [$encode], [$charset], [$option]) // Sends a JSONP response.
-```
-
-Any custom methods added with `map` and `register` can also be filtered.
-
-
-# Framework Instance
-
-Instead of running PlumePHP as a global static class, you can optionally run it
-as an object instance.
-
-```php
-require 'PlumePHP/autoload.php';
-
-use PlumeEngine;
-
-$app = new PlumeEngine();
-
-$app->route('/', function(){
-    echo 'hello world!';
+$app->route('*', function () use ($app) {
+    $app->runAction();
 });
 
 $app->start();
 ```
 
-So instead of calling the static method, you would call the instance method with
-the same name on the Engine object.
+**The difference:** `PlumePHP::method()` goes through `__callStatic` and checks for registered `before/after` filters before dispatching. `$app->method()` calls the engine directly, bypassing the event system. When no filters are registered, both styles behave identically.
+
+---
+
+## Routing
+
+```php
+// Method constraints
+PlumePHP::route('GET /search', $callback);
+PlumePHP::route('GET|POST /form', $callback);
+
+// Named parameters
+PlumePHP::route('/user/@id', function ($id) { ... });
+
+// Named parameter with regex constraint
+PlumePHP::route('/post/@slug:[a-z-]+', function ($slug) { ... });
+
+// Optional segments
+PlumePHP::route('/blog(/@year(/@month))', function ($y, $m) { ... });
+
+// Wildcard (splat)
+PlumePHP::route('/files/*', function ($splat) { ... });
+
+// Pass the matched route object (third argument true)
+PlumePHP::route('/info', $callback, true);   // last callback arg is PlumeRoute
+
+// Route groups (shared prefix + optional middleware)
+PlumePHP::group('/api', function () {
+    PlumePHP::route('/users', $callback);
+    PlumePHP::route('/orders', $callback);
+}, [$middleware]);
+
+// Catch-all
+PlumePHP::route('*', $callback);
+```
+
+- Routes are matched in declaration order; the first match wins.
+- Returning `true` from a handler continues matching to the next route.
+- Matching is case-insensitive by default; set `PlumePHP::router()->case_sensitive = true` to enable case-sensitive mode.
+
+### Route Regex Cache
+
+For applications with many routes, enable compiled regex caching to avoid re-parsing on every request:
+
+```php
+PlumePHP::app()->enableRouteCache('/path/to/storage/route_cache.php');
+// or
+PlumePHP::router()->enableCache('/path/to/storage/route_cache.php');
+```
+
+---
+
+## Middleware (PSR-15)
+
+```php
+class AuthMiddleware implements PlumeMiddlewareInterface
+{
+    public function process(PlumeRequest $request, PlumeRequestHandlerInterface $handler): PlumeResponse
+    {
+        if (!isset($_SERVER['HTTP_AUTHORIZATION'])) {
+            return PlumePHP::response()->status(401)->write('Unauthorized');
+        }
+        return $handler->handle($request);
+    }
+}
+
+PlumePHP::app()->addMiddleware(new AuthMiddleware());
+PlumePHP::start();
+```
+
+---
+
+## Request & Response
+
+```php
+$req = PlumePHP::request();
+$req->query['id'];           // $_GET
+$req->data['name'];          // $_POST
+$req->method;                // GET / POST / PUT …
+$req->url;                   // current URL
+$req->headers['User-Agent'];
+
+$res = PlumePHP::response();
+$res->status(201)
+    ->header('X-Custom', 'value')
+    ->write('body')
+    ->send();
+
+// Shorthand JSON responses
+PlumePHP::json(['code' => 0, 'data' => $data]);
+PlumePHP::jsonp(['code' => 0], 'callback');
+```
+
+---
+
+## Template Rendering
+
+```php
+// Render views/home.tpl.php wrapped in views/layout.tpl.php
+PlumePHP::render('home', ['user' => $user], null, 'layout');
+
+// Inside an Action
+$this->assign('user', $user);
+$this->render('home', 'layout');   // second arg is the layout file name
+$this->render('home', '');         // no layout
+```
+
+Templates live in `views/` with the `.tpl.php` extension by default. Variables are made available via `extract()`.
+
+---
+
+## Logging
+
+```php
+L('message');                          // DEBUG — written to daily .log
+L('warn', [], 'WARN', true);           // WARN — also written to .log.wf
+L('query', [], 'SQL');                 // SQL — written to .log.sql
+
+// PSR-3 interface
+PlumePHP::logger()->info('started');
+PlumePHP::logger()->error('failed', ['code' => 500]);
+```
+
+**Log file rules:**
+
+| File | Levels |
+|---|---|
+| `storage/log/YYYYMMDD.log` | DEBUG / INFO / NOTICE (NOTICE also written to wf) |
+| `storage/log/YYYYMMDD.log.wf` | WARN / ERROR / FATAL / CRITICAL, and NOTICE |
+| `storage/log/YYYYMMDD.log.sql` | SQL |
+
+**Output format (`setFormatter`):**
+
+```php
+// text (default): [2025-01-01 12:00:00][logId][LEVEL]message
+// json: {"time":"...","log_id":"...","level":"...","msg":"...","ctx":{...}}
+PlumePHP::logger()->setFormatter('json');
+```
+
+**Write mode (`setMode`):**
+
+```php
+// normal (default): each entry is flushed to disk immediately
+// batch: buffer all entries and flush at request end — reduces disk I/O in Worker mode
+PlumePHP::logger()->setMode('batch');
+```
+
+**Custom handlers (alerting, etc.):**
+
+```php
+// DingTalk alert (triggered on ERROR and above)
+PlumePHP::logger()->addHandler(
+    PlumeLogHandlers::dingtalk('https://oapi.dingtalk.com/robot/send?access_token=xxx')
+);
+
+// Sentry
+PlumePHP::logger()->addHandler(
+    PlumeLogHandlers::sentry('https://key@sentry.io/project')
+);
+
+// Minimum-level filter (wraps any handler)
+PlumePHP::logger()->addHandler(
+    PlumeLogHandlers::minLevel('WARNING', PlumeLogHandlers::dingtalk($webhook))
+);
+```
+
+---
+
+## Configuration
+
+```php
+// config/config.php returns a plain array.
+// PLUME_PHP_ENV selects an optional override file: config/{env}.php
+
+C('USE_SESSION')             // read a top-level key
+C('DB_CONF.master.db_port')  // dot notation, up to three levels
+C(['key1', 'key2'])          // bulk read — returns associative array
+C(['KEY' => 'val'])          // bulk write
+
+C('MY_KEY', 'value');        // single-key write
+
+// Engine variables (runtime)
+PlumePHP::set('plumephp.base_url', 'https://example.com');
+PlumePHP::get('plumephp.base_url');
+PlumePHP::has('plumephp.base_url');
+PlumePHP::clear('plumephp.base_url');
+```
+
+**Common configuration options:**
+
+| Key | Default | Description |
+|---|---|---|
+| `USE_SESSION` | `true` | Auto-start session |
+| `TIME_ZONE` | `'Asia/Shanghai'` | Default timezone |
+| `VDNAME` | `''` | Virtual directory prefix |
+| `DB_CONF` | `[...]` | Database connection config |
+| `plumephp.handle_errors` | `true` | Convert PHP errors to exceptions |
+| `plumephp.case_sensitive` | `false` | Case-sensitive route matching |
+| `plumephp.base_url` | auto | Base URL for assets/links |
+| `plumephp.views.path` | `'./views'` | Template directory |
+| `plumephp.views.extension` | `'.tpl.php'` | Template file extension |
+
+---
+
+## Extension Mechanisms
+
+```php
+// Add a custom method
+PlumePHP::map('hello', function (string $name) {
+    echo "Hello, {$name}!";
+});
+PlumePHP::hello('World');
+
+// Register a lazy-loaded service
+PlumePHP::register('db', 'MyDB', [$dsn], function ($db) {
+    $db->connect();
+});
+PlumePHP::db();        // shared instance
+PlumePHP::db(false);   // new instance on every call
+
+// Before / After filters (returning false from before breaks the chain)
+PlumePHP::before('start', function (&$params, &$output) { ... });
+PlumePHP::after('start',  function (&$params, &$output) { ... });
+```
+
+---
+
+## PSR-11 Container
+
+```php
+$container = PlumePHP::app()->container();
+
+// Bind an interface to a concrete implementation
+$container->bind(LoggerInterface::class, MyLogger::class);
+
+// Bind a factory closure
+$container->bindFactory('cache', function ($c) {
+    return new RedisCache($c->get('config'));
+});
+
+$logger = $container->get(LoggerInterface::class);
+```
+
+---
+
+## Database
+
+Uses the bundled **Medoo** library (`library/core/Plume/Libs/Medoo.php`):
+
+```php
+$db = DB();               // default connection (first entry in DB_CONF)
+$db = DB('master');       // connection by key
+$db = DB(['db_server' => '127.0.0.1', 'db_name' => 'test', ...]);
+
+$rows  = $db->select('users', ['id', 'name'], ['age[>]' => 18]);
+$id    = $db->insert('users', ['name' => 'John', 'age' => 30]);
+$db->update('users', ['age' => 31], ['id' => 1]);
+$db->delete('users', ['id' => 1]);
+$rows  = $db->query('SELECT * FROM users')->fetchAll(\PDO::FETCH_ASSOC);
+```
+
+DB config keys: `db_server` / `db_port` / `db_user` / `db_password` / `db_name` / `db_charset` / `db_prefix`
+
+---
+
+## Module / Action System
+
+The URL `/{module}/{controller}/{action}` is automatically mapped to the filesystem:
+
+```
+application/
+  {module}/
+    {module}.boot.php          # Module bootstrap; defines the base Action class
+    actions/
+      {controller}.action.php  # class {module}_{controller}_action
+    console/
+      {cmd}.cmd.php            # class {module}_{cmd}_cmd (CLI only)
+    views/
+      {template}.tpl.php
+      layout.tpl.php
+```
+
+**Action example:**
+
+```php
+// application/web/actions/home.action.php
+class web_home_action extends web_base_action
+{
+    // protected $csrfValidate = false;  // disable CSRF for this action
+
+    public function invoke()
+    {
+        $id = $this->getParam('id', 0);
+
+        $this->assign('user', $userData);
+        $this->render('home', 'layout');    // render template
+
+        // or return JSON
+        $this->correct(['key' => 'value']); // {code:0, msg:'', data:{...}}
+        $this->error('Not found', 404);     // {code:404, msg:'Not found'}
+    }
+
+    public function beforeRun()  { /* runs before invoke() */ }
+    public function afterRun($r) { /* runs after invoke()  */ }
+}
+```
+
+**Action helper methods:**
+
+| Method | Purpose |
+|---|---|
+| `getParam($name, $default)` | Fetch GET / POST / Cookie parameter |
+| `setParam($name, $value)` | Set a request parameter |
+| `assign($name, $value)` | Pass a variable to the template |
+| `render($view, $layout, $data)` | Render template (auto-injects CSRF token) |
+| `json($code, $msg, $data)` | Emit `{code, msg, data}` JSON |
+| `correct($data, $msg)` | Shorthand for `json(0, $msg, $data)` |
+| `error($msg, $code, $asJson)` | Error page or JSON error response |
+| `getCsrfToken()` | Get the current CSRF token |
+| `validateCsrfToken()` | Validate token (auto-called on POST/PUT/PATCH) |
+| `addJs($file)` / `addCss($file)` | Register asset files for the layout |
+
+**CSRF notes:**
+- Token stored in the `plume-csrf-token` cookie; validated against the `plume-csrf` HMAC cookie.
+- Submit via `$_POST['plume_csrf']` or the `X-CSRF-TOKEN` request header.
+- Templates receive `$csrf_token` (token value) and `$csrf_field` (hidden input HTML) automatically.
+
+---
+
+## CLI Commands
+
+```php
+// application/web/console/migrate.cmd.php
+class web_migrate_cmd
+{
+    public function run(array $opts): void
+    {
+        // $opts = parsed argv
+    }
+}
+```
+
+```bash
+php public/index.php -m web -c migrate
+php public/index.php --module web --cmd migrate --dry
+```
+
+---
+
+## Schema & JSON Mapping
+
+`PlumeSchema` is a JSON-serializable data model base class. Property names are automatically converted to `snake_case` during serialization:
+
+```php
+class UserSchema extends PlumeSchema
+{
+    public int $userId = 0;
+    public string $userName = '';
+}
+
+// Create from request parameters
+$param = PlumePHP::app()->request()->param();  // PlumeParam
+$user  = UserSchema::createFromPlumeParam($param);
+
+// Serializes to JSON: {"user_id":1,"user_name":"John"}
+echo json_encode($user);
+```
+
+`PlumeJsonMapper` can be used standalone to map a JSON array onto any PHP object:
+
+```php
+$mapper = new PlumeJsonMapper();
+$obj    = $mapper->map($jsonArray, new MyModel());
+```
+
+---
+
+## FrankenPHP Worker Mode
+
+In Worker mode PHP stays alive between requests, eliminating cold-start overhead. The entry point is `public/worker.php`:
+
+```php
+// Routes must be re-registered each iteration because resetForWorker() clears the router.
+while (frankenphp_handle_request(function () {
+    PlumePHP::resetForWorker();   // clears router, request/response, session; preserves boot config
+
+    PlumePHP::route('GET /api', fn() => ...);
+    PlumePHP::route('*', fn() => PlumePHP::app()->runAction());
+
+    PlumePHP::start();
+}));
+```
+
+```bash
+# Development (traditional mode, no worker overhead)
+frankenphp php-server --root public/
+
+# Worker mode (persistent processes)
+frankenphp php-server --worker public/worker.php --root public/
+```
+
+> Do not store mutable, request-specific state in static variables or module-level singletons — they persist across requests in Worker mode.
+
+---
+
+## Global Helper Functions
+
+| Function | Purpose |
+|---|---|
+| `C($key, $val)` | Config get/set (dot notation, up to 3 levels) |
+| `I($path, $once)` | Conditional file include |
+| `L($msg, $ctx, $level, $wf)` | Write a log entry |
+| `T($e, $offset)` | Format exception stack trace as string |
+| `E($prefix, $e)` | Log an error with stack trace |
+| `DB($opts)` | Get a Medoo instance |
+| `json_output($msg, $code, $data)` | Emit `{code,msg,data}` JSON and exit |
+| `redirect($url, $time, $msg)` | HTTP redirect or meta-refresh |
+| `html_filter($html)` | Strip script/iframe/onclick/style tags |
+| `strcut($str, $len, $ext, $zh_len)` | UTF-8 string truncation with suffix |
+| `generate_nonce_str($len)` | Random alphanumeric string |
+| `uuid($prefix)` | MD5-based unique ID |
+| `authcode($str, $op, $key, $exp)` | Discuz-style encrypt/decrypt |
+| `signature($data, $key)` | MD5 parameter signature |
+| `curl_get_contents($url, $post, ...)` | HTTP request via cURL |
+| `get_client_ip($type)` | Get the real client IP address |
+| `is_weixin_browser()` | Detect WeChat browser |
+| `money_yuan_to_fen($price)` | Float yuan → integer cents |
+| `money_fen_to_yuan($price)` | Integer cents → float yuan |
+| `export_csv($filename, $data)` | Generate and download a CSV file |
+| `dump($var, ...)` | Pretty-print variables |
+| `dump_with_exit(...)` | Pretty-print then exit |
+| `human_date($ts, $fmt)` | Relative time string ("2 hours ago") |
+| `str_starts_with()` / `str_ends_with()` | PHP 8.0 polyfills |
+
+---
+
+## Development Commands
+
+```bash
+# Install dependencies
+composer install
+
+# Run all tests
+./vendor/bin/phpunit tests/
+
+# Run a single test file
+./vendor/bin/phpunit tests/RouterTest.php
+
+# Static analysis
+./vendor/bin/phpstan analyse
+
+# Build single-file distribution artifact (dist/Plume.php)
+composer build
+```
+
+---
+
+## Directory Structure
+
+```
+library/
+  PlumePHP.php          # Bootstrap entry point + global functions + static facade
+  PlumeHelper.php       # Static utility class
+  common.php            # Global function aliases → PlumeHelper
+  Plume/
+    Engine/             # Core classes (Router, Event, Loader, Container…)
+    Http/               # HTTP layer (Request, Response, Router, Route)
+    Support/            # Services & utilities (Logger, View, Param, Schema…)
+  core/Plume/Libs/      # Bundled third-party libraries (Medoo, Curl, Action…)
+dist/
+  Plume.php             # Single-file distribution artifact (generated by composer build)
+public/
+  index.php             # Web entry point
+  worker.php            # FrankenPHP Worker entry point
+application/            # Application code (modules / Actions / views / commands)
+config/                 # Configuration files
+storage/log/            # Log directory
+```
