@@ -4,16 +4,16 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-class ViewTest extends PHPUnit_Framework_TestCase
+class ViewTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeView
      */
     private $view;
 
-    public function setUp()
+    public function setUp(): void
     {
         $this->view = new PlumeView();
         $this->view->path = __DIR__.'/views';
@@ -68,5 +68,24 @@ class ViewTest extends PHPUnit_Framework_TestCase
         $this->view->extension = '.html';
         $this->view->render('world', null, false);
         $this->expectOutputString('Hello world, Bob!');
+    }
+
+    public function testEEscapesHtmlSpecialChars(): void
+    {
+        ob_start();
+        $this->view->e('<script>alert("xss") & more</script>');
+        $output = ob_get_clean();
+        $this->assertStringNotContainsString('<script>', $output);
+        $this->assertStringContainsString('&lt;script&gt;', $output);
+        $this->assertStringContainsString('&amp;', $output);
+    }
+
+    public function testEEscapesQuotes(): void
+    {
+        ob_start();
+        $this->view->e("it's a \"test\"");
+        $output = ob_get_clean();
+        $this->assertStringContainsString('&#039;', $output);
+        $this->assertStringContainsString('&quot;', $output);
     }
 }

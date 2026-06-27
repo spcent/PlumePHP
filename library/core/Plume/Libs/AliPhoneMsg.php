@@ -49,7 +49,7 @@ class AliPhoneMsg {
     public function request($accessKeyId, $accessKeySecret, $domain, $params, $security = false){
         $apiParams = array_merge(array (
             "SignatureMethod" => "HMAC-SHA1",
-            "SignatureNonce" => uniqid(mt_rand(0,0xffff), true),
+            "SignatureNonce" => uniqid((string) mt_rand(0, 0xffff), true),
             "SignatureVersion" => "1.0",
             "AccessKeyId" => $accessKeyId,
             "Timestamp" => gmdate("Y-m-d\TH:i:s\Z"),

@@ -4,18 +4,18 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
 require_once __DIR__.'/classes/Hello.php';
 
-class MapTest extends PHPUnit_Framework_TestCase
+class MapTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeEngine
      */
     private $app;
 
-    public function setUp()
+    public function setUp(): void
     {
         $this->app = new PlumeEngine();
     }
@@ -64,7 +64,8 @@ class MapTest extends PHPUnit_Framework_TestCase
     // Unmapped method
     public function testUnmapped()
     {
-        $this->setExpectedException('Exception', 'doesNotExist must be a mapped method.');
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('doesNotExist must be a mapped method.');
         $this->app->doesNotExist();
     }
 }

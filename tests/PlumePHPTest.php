@@ -4,11 +4,11 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-class PlumePHPTest extends PHPUnit_Framework_TestCase
+class PlumePHPTest extends \PHPUnit\Framework\TestCase
 {
-    public function setUp() {
+    public function setUp(): void {
         PlumePHP::init();
     }
 
@@ -75,7 +75,8 @@ class PlumePHPTest extends PHPUnit_Framework_TestCase
     // Unmapped method
     public function testUnmapped()
     {
-        $this->setExpectedException('Exception', 'doesNotExist must be a mapped method.');
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('doesNotExist must be a mapped method.');
         PlumePHP::doesNotExist();
     }
 }

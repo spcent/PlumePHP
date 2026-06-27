@@ -27,8 +27,7 @@ class Curl
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_USERAGENT, '');
-        curl_setopt($ch, CURLOPT_REFERER, '');
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 10));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         $startTime = microtime(true);
         $result = curl_exec($ch);
@@ -70,7 +69,7 @@ class Curl
 
         curl_setopt($ch, CURLOPT_HEADER, false);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        curl_setopt($ch, CURLOPT_DNS_USE_GLOBAL_CACHE, FALSE);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 10));
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         // 设置Header信息
         !is_array($headers) && $headers = [];
@@ -91,7 +90,7 @@ class Curl
     /**
      * curl post json 请求
      * @param string $url
-     * @param array $data
+     * @param array|string $data Array will be JSON-encoded; pass a pre-encoded string to skip encoding.
      */
     public static function postJson($url, $data, $timeout = 10)
     {
@@ -99,13 +98,16 @@ class Curl
             return false;
         }
 
+        $body = is_string($data) ? $data : json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
         $ch = curl_init();
-        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json','charset=utf-8']);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json; charset=utf-8']);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 10));
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
 
         $startTime = microtime(true);
         $result = curl_exec($ch);
@@ -113,6 +115,7 @@ class Curl
         self::$errno = curl_errno($ch);
         self::$error = curl_error($ch);
         self::$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
         return $result;
     }
 }

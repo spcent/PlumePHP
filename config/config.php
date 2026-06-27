@@ -14,7 +14,7 @@ if (!function_exists('DB')) {
         if (count($cfgdb) < 1) {
             throw new \Exception('db config error');
         }
-        if (!empty($options) || is_string($options)) {
+        if (!empty($options) && is_string($options)) {
             $key = $options;
         } else {
             $key = empty($options['key']) ? key($cfgdb) : $options['key'];

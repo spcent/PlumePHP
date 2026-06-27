@@ -6,3 +6,5 @@ vendor/
 composer.phar
 composer.lock
 storage/log
+library/storage/
+.phpunit.result.cache

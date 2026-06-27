@@ -4,16 +4,16 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
-class RequestTest extends PHPUnit_Framework_TestCase
+class RequestTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeRequest
      */
     private $request;
 
-    public function setUp()
+    public function setUp(): void
     {
         $_SERVER['REQUEST_URI'] = '/';
         $_SERVER['SCRIPT_NAME'] = '/index.php';
@@ -85,8 +85,60 @@ class RequestTest extends PHPUnit_Framework_TestCase
 
     public function testMethodOverrideWithPost()
     {
+        $_SERVER['REQUEST_METHOD'] = 'POST';
         $_REQUEST['_method'] = 'PUT';
         $request = new PlumeRequest();
         $this->assertEquals('PUT', $request->method);
+    }
+
+    public function testMethodOverrideIgnoredOnGet(): void
+    {
+        unset($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE']);
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_REQUEST['_method'] = 'DELETE';
+        $request = new PlumeRequest();
+        // _method tunnelling must be ignored when the real method is not POST
+        $this->assertEquals('GET', $request->method);
+    }
+
+    public function testIsMobileReturnsFalseForDesktopUA(): void
+    {
+        $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0';
+        unset($_SERVER['HTTP_X_WAP_PROFILE'], $_SERVER['HTTP_PROFILE']);
+        $request = new PlumeRequest();
+        $this->assertFalse($request->isMobile());
+    }
+
+    public function testIsMobileReturnsTrueForAndroidUA(): void
+    {
+        $_SERVER['HTTP_USER_AGENT'] = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 Mobile Safari/537.36';
+        unset($_SERVER['HTTP_X_WAP_PROFILE'], $_SERVER['HTTP_PROFILE']);
+        $request = new PlumeRequest();
+        $this->assertTrue($request->isMobile());
+    }
+
+    public function testIsMobileReturnsTrueForWapProfile(): void
+    {
+        $_SERVER['HTTP_X_WAP_PROFILE'] = 'http://wap.example.com/profile.xml';
+        $_SERVER['HTTP_USER_AGENT'] = 'SomeGenericBrowser/1.0';
+        unset($_SERVER['HTTP_PROFILE']);
+        $request = new PlumeRequest();
+        $this->assertTrue($request->isMobile());
+    }
+
+    public function testIsMobileReturnsTrueForHttpProfile(): void
+    {
+        unset($_SERVER['HTTP_X_WAP_PROFILE']);
+        $_SERVER['HTTP_PROFILE'] = 'http://wap.example.com/profile.xml';
+        $_SERVER['HTTP_USER_AGENT'] = 'SomeGenericBrowser/1.0';
+        $request = new PlumeRequest();
+        $this->assertTrue($request->isMobile());
+    }
+
+    public function testIsMobileReturnsFalseWhenUaMissing(): void
+    {
+        unset($_SERVER['HTTP_X_WAP_PROFILE'], $_SERVER['HTTP_PROFILE'], $_SERVER['HTTP_USER_AGENT']);
+        $request = new PlumeRequest();
+        $this->assertFalse($request->isMobile());
     }
 }

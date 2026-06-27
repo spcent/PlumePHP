@@ -3,15 +3,15 @@
 namespace Plume\Libs;
 
 /**
- * 抽象Action动作逻辑
+ * Abstract base class for all action handlers.
  */
 abstract class Action
 {
-    private $csrfToken = null;
-    private $csrfTokenKey = 'plume-csrf-token';
-    private $trueTokenKey = 'plume-csrf';
-    private $csrfHeaderKey = 'X-CSRF-TOKEN';
-    private $csrfPostKey = 'plume_csrf';
+    private ?string $csrfToken = null;
+    private string $csrfTokenKey = 'plume-csrf-token';
+    private string $trueTokenKey = 'plume-csrf';
+    private string $csrfHeaderKey = 'X-CSRF-TOKEN';
+    private string $csrfPostKey = 'plume_csrf';
 
     /**
      * Flag for called listener
@@ -25,18 +25,67 @@ abstract class Action
      * User parameters
      *
      * @access private
-     * @var array
+     * @var array<string, mixed>
      */
-    private $params = [];
+    private array $params = [];
     
     /**
-     * csrf验证
+     * Whether to enforce CSRF token validation for this action.
      * @var bool
      */
     protected $csrfValidate = true;
 
-    protected $jsFiles = [];
-    protected $cssFiles = [];
+    /**
+     * Declarative validation rules for request parameters.
+     *
+     * Format:
+     *   protected array $rules = [
+     *       'field'   => 'required',
+     *       'age'     => 'required|int|min:18|max:120',
+     *       'email'   => 'required|email',
+     *       'name'    => 'required|string|minLen:2|maxLen:64',
+     *       'status'  => 'required|in:active,inactive,pending',
+     *       'phone'   => 'required|regex:/^1[3-9]\d{9}$/',
+     *       'avatar'  => 'file|mimes:jpg,jpeg,png|maxSize:2048',
+     *       'pass2'   => 'required|confirmed:password',
+     *       'tags'    => 'array|each:string',
+     *   ];
+     *
+     * Supported constraints:
+     *   required, int, float, string, email,
+     *   min:<n>, max:<n>, minLen:<n>, maxLen:<n>,
+     *   regex:<pattern>, in:<v1,v2,...>,
+     *   file, mimes:<ext,...>, maxSize:<kb>,
+     *   confirmed[:<other_field>], array, each:<rule>
+     *
+     * Register project-level custom rules once at boot time:
+     *   Action::addRule('phone_cn', fn($v) => (bool)preg_match('/^1[3-9]\d{9}$/', $v));
+     *
+     * Override validate() for custom logic; return an array of field→message
+     * pairs to signal failure, or an empty array on success.
+     *
+     * @var array<string, string>
+     */
+    protected array $rules = [];
+
+    /** @var array<string, callable(mixed): bool> Globally registered custom rules */
+    private static array $customRules = [];
+
+    /**
+     * Register a named custom validation rule available to all Action subclasses.
+     *
+     * @param string   $name     Rule name used in $rules strings
+     * @param callable $callback fn(mixed $value): bool — true means valid
+     */
+    public static function addRule(string $name, callable $callback): void
+    {
+        self::$customRules[$name] = $callback;
+    }
+
+    /** @var string[] */
+    protected array $jsFiles = [];
+    /** @var string[] */
+    protected array $cssFiles = [];
 
     /**
      * Set an user defined parameter
@@ -82,20 +131,20 @@ abstract class Action
         return $default;
     }
 
-    public function addJs($jsFile)
+    public function addJs(string $jsFile): void
     {
         $this->jsFiles[] = $jsFile;
     }
 
-    public function addCss($cssFile)
+    public function addCss(string $cssFile): void
     {
         $this->cssFiles[] = $cssFile;
     }
 
     /**
-     * 模板变量赋值
-     * @param string $name 名称
-     * @param string $value 值
+     * Assign a variable to the view template.
+     * @param string $name  Variable name
+     * @param mixed  $value Variable value
      * @return self
      */
     public function assign($name, $value)
@@ -105,13 +154,17 @@ abstract class Action
     }
 
     /**
-     * 渲染模板
-     * @param string $view 模板文件
-     * @param string $layout 布局文件
-     * @param array $data 模板数据
-     * @param string $module 模块名称，默认为false
+     * Render a view template with an optional layout.
+     * @param string      $view   View file name (without extension)
+     * @param string      $layout Layout file name; empty string disables layout
+     * @param array       $data   Extra variables passed to the template
+     * @param string|false $module Module name; defaults to the current module
      */
-    public function render($view, $layout = 'layout', $data = [], $module = false)
+    /**
+     * @param array<string, mixed> $data
+     * @param string|false         $module
+     */
+    public function render(string $view, string $layout = 'layout', array $data = [], mixed $module = false): void
     {
         if ($module === false) {
             $module = \PlumePHP::get('plumephp.module');
@@ -120,10 +173,10 @@ abstract class Action
         $viewObj = \PlumePHP::view();
         if ($this->csrfValidate) {
             $csrfFormStr = sprintf('<input type="hidden" name="%s" value="%s" />', $this->csrfPostKey, $this->csrfToken);
-            $viewObj->set('csrfToken', $this->getCsrfToken());
-            $viewObj->set('csrfPost', $this->csrfPostKey);
-            $viewObj->set('_csrf_form_', $csrfFormStr);
+            $viewObj->set('csrf_token', $this->getCsrfToken());
+            $viewObj->set('csrf_field', $csrfFormStr);
         }
+        header('Content-type: text/html; charset=utf-8');
 
         $viewObj->set('js_files', $this->jsFiles);
         $viewObj->set('css_files', $this->cssFiles);
@@ -132,9 +185,9 @@ abstract class Action
     }
 
     /**
-     * run方法
+     * Entry point called by the dispatcher; handles CSRF, validation, and lifecycle hooks.
      */
-    public function run()
+    public function run(): mixed
     {
         // Avoid infinite loop, a listener instance can be called only one time
         if ($this->called) {
@@ -142,8 +195,7 @@ abstract class Action
         }
 
         $this->csrfToken = $this->getCookie($this->csrfTokenKey);
-        header('Content-type: text/html; charset=utf-8');
-        if ($this->csrfValidate && !$this->validateCsrfToken()) {
+        if ($this->csrfValidate && C('PLUME_PHP_ENV') !== 'testing' && !$this->validateCsrfToken()) {
             header('HTTP/1.1 401 Unauthorized');
             $this->error("Unauthorized");
         }
@@ -151,6 +203,15 @@ abstract class Action
         $this->createCsrfToken();
         if (!$this->beforeRun()) {
             return false;
+        }
+
+        // Declarative validation
+        if (!empty($this->rules)) {
+            $errors = $this->validate();
+            if (!empty($errors)) {
+                $firstMsg = reset($errors);
+                $this->error((string) $firstMsg, 422, true);
+            }
         }
 
         $executed = $this->execute();
@@ -161,46 +222,243 @@ abstract class Action
     }
 
     /**
-     * display to json
-     * @param int $code 编码
-     * @param string $msg 消息
-     * @param mixed 数据
+     * Validate request parameters against $this->rules.
+     *
+     * @return array<string, string> field→error message map; empty means valid
      */
-    public function json($code, $msg, $data)
+    public function validate(): array
+    {
+        $errors = [];
+        foreach ($this->rules as $field => $ruleStr) {
+            $value       = $this->getParam($field);
+            $constraints = array_filter(array_map('trim', explode('|', $ruleStr)));
+
+            foreach ($constraints as $constraint) {
+                // Split on first colon only; regex rules may contain colons inside the pattern
+                $colonPos = strpos($constraint, ':');
+                if ($colonPos !== false) {
+                    $rule = substr($constraint, 0, $colonPos);
+                    $arg  = substr($constraint, $colonPos + 1);
+                } else {
+                    $rule = $constraint;
+                    $arg  = null;
+                }
+
+                $empty = ($value === null || $value === '');
+
+                switch ($rule) {
+                    case 'required':
+                        if ($empty) {
+                            $errors[$field] = "{$field} is required";
+                        }
+                        break;
+
+                    case 'int':
+                        if (!$empty && !ctype_digit((string) $value) && !is_int($value)) {
+                            $errors[$field] = "{$field} must be an integer";
+                        }
+                        break;
+
+                    case 'float':
+                        if (!$empty && !is_numeric($value)) {
+                            $errors[$field] = "{$field} must be a number";
+                        }
+                        break;
+
+                    case 'string':
+                        if (!$empty && !is_string($value)) {
+                            $errors[$field] = "{$field} must be a string";
+                        }
+                        break;
+
+                    case 'email':
+                        if (!$empty && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+                            $errors[$field] = "{$field} must be a valid email address";
+                        }
+                        break;
+
+                    case 'min':
+                        if (!$empty && is_numeric($value) && (float) $value < (float) $arg) {
+                            $errors[$field] = "{$field} must be at least {$arg}";
+                        }
+                        break;
+
+                    case 'max':
+                        if (!$empty && is_numeric($value) && (float) $value > (float) $arg) {
+                            $errors[$field] = "{$field} must be no greater than {$arg}";
+                        }
+                        break;
+
+                    case 'minLen':
+                        if (!$empty && mb_strlen((string) $value) < (int) $arg) {
+                            $errors[$field] = "{$field} must be at least {$arg} characters long";
+                        }
+                        break;
+
+                    case 'maxLen':
+                        if (!$empty && mb_strlen((string) $value) > (int) $arg) {
+                            $errors[$field] = "{$field} must be no more than {$arg} characters long";
+                        }
+                        break;
+
+                    case 'regex':
+                        // arg is the pattern, e.g.  /^1[3-9]\d{9}$/
+                        if (!$empty && !preg_match((string) $arg, (string) $value)) {
+                            $errors[$field] = "{$field} format is invalid";
+                        }
+                        break;
+
+                    case 'in':
+                        // arg is comma-separated allowed values, e.g. active,inactive,pending
+                        if (!$empty) {
+                            $allowed = array_map('trim', explode(',', (string) $arg));
+                            if (!in_array((string) $value, $allowed, true)) {
+                                $errors[$field] = "{$field} must be one of: {$arg}";
+                            }
+                        }
+                        break;
+
+                    case 'confirmed':
+                        // Verify value equals another field (default: {field}_confirm)
+                        $otherField = $arg ?: ($field . '_confirm');
+                        $other      = $this->getParam($otherField);
+                        if ($value !== $other) {
+                            $errors[$field] = "{$field} does not match {$otherField}";
+                        }
+                        break;
+
+                    case 'array':
+                        if (!$empty && !is_array($value)) {
+                            $errors[$field] = "{$field} must be an array";
+                        }
+                        break;
+
+                    case 'each':
+                        // Apply a single sub-rule to every element of an array field
+                        if (is_array($value) && $arg !== null) {
+                            foreach ($value as $idx => $item) {
+                                $subErrors = $this->applySimpleRule("{$field}[{$idx}]", $item, (string) $arg, null);
+                                if ($subErrors) {
+                                    $errors[$field] = $subErrors;
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+
+                    case 'file':
+                        // Checks the field exists in $_FILES and has no upload error
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo === null || ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                            $errors[$field] = "{$field} file upload failed or no file selected";
+                        }
+                        break;
+
+                    case 'mimes':
+                        // Comma-separated extensions, e.g. jpg,jpeg,png
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo && ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                            $ext      = strtolower(pathinfo($fileInfo['name'], PATHINFO_EXTENSION));
+                            $allowed  = array_map('trim', explode(',', strtolower((string) $arg)));
+                            if (!in_array($ext, $allowed, true)) {
+                                $errors[$field] = "{$field} only allows: {$arg} file types";
+                            }
+                        }
+                        break;
+
+                    case 'maxSize':
+                        // Maximum file size in kilobytes
+                        $fileInfo = $_FILES[$field] ?? null;
+                        if ($fileInfo && ($fileInfo['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+                            $sizeKb = ($fileInfo['size'] ?? 0) / 1024;
+                            if ($sizeKb > (float) $arg) {
+                                $errors[$field] = "{$field} file size must not exceed {$arg} KB";
+                            }
+                        }
+                        break;
+
+                    default:
+                        // Check registered custom rules
+                        if (isset(self::$customRules[$rule])) {
+                            if (!$empty && !(self::$customRules[$rule])($value)) {
+                                $errors[$field] = "{$field} format is invalid";
+                            }
+                        }
+                        break;
+                }
+
+                // Stop checking this field once an error is found
+                if (isset($errors[$field])) {
+                    break;
+                }
+            }
+        }
+        return $errors;
+    }
+
+    /**
+     * Apply a single named rule to $value; used internally by the "each" rule.
+     *
+     * @return string Error message, or empty string if valid
+     */
+    private function applySimpleRule(string $label, mixed $value, string $rule, ?string $arg): string
+    {
+        $empty = ($value === null || $value === '');
+        return match ($rule) {
+            'required' => $empty ? "{$label} is required" : '',
+            'int'      => (!$empty && !ctype_digit((string) $value) && !is_int($value))
+                              ? "{$label} must be an integer" : '',
+            'float'    => (!$empty && !is_numeric($value)) ? "{$label} must be a number" : '',
+            'string'   => (!$empty && !is_string($value)) ? "{$label} must be a string" : '',
+            'email'    => (!$empty && !filter_var($value, FILTER_VALIDATE_EMAIL))
+                              ? "{$label} must be a valid email address" : '',
+            default    => '',
+        };
+    }
+
+    /**
+     * Emit a JSON envelope response.
+     * @param int    $code Response code (0 = success)
+     * @param string $msg  Human-readable message
+     * @param mixed  $data Response data payload
+     */
+    public function json(int $code, string $msg, mixed $data): void
     {
         $res = ['code'=>$code, 'msg'=>$msg, 'data'=>$data];
         \PlumePHP::json($res, 200, true, 'utf-8', JSON_UNESCAPED_UNICODE);
     }
 
     /**
-     * @param array $ret
-     * @param string $msg
+     * @param array<mixed> $ret
      */
-    public function correct($ret = [], $msg = 'success')
+    public function correct(array $ret = [], string $msg = 'success'): void
     {
         $this->json(0, $msg, $ret);
     }
 
     /**
-     * @param string $msg
-     * @param bool $json 是否强制显示json
+     * Terminate the action with an error response.
+     * @param string $msg  Error message
+     * @param int    $code Error code (default 1)
+     * @param bool   $json Force JSON output even for non-AJAX requests
      */
-    public function error($msg = "数据异常", $code = 1, $json = false)
+    public function error(string $msg = "Data error", int $code = 1, bool $json = false): never
     {
         if (!$json && !IS_AJAX) {
+            $escapedMsg = htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             $html = <<<EOF
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
     <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-    <title>出错啦</title>
+    <title>An Error Occurred</title>
     </head>
     <body>
     <div class="container">
-        <h1>出错啦！</h1>
-        <p class="msg">{$msg}</p>
+        <h1>An Error Occurred</h1>
+        <p class="msg">{$escapedMsg}</p>
     </div>
     </body>
 </html>
@@ -213,10 +471,10 @@ EOF;
     }
 
     /**
-     * @param null $key
+     * @param string|null $key
      * @return mixed
      */
-    public function getCookie($key = null)
+    public function getCookie(?string $key = null)
     {
         if ($key) {
             return isset($_COOKIE[$key]) ? $_COOKIE[$key] : null;
@@ -226,21 +484,21 @@ EOF;
     }
 
     /**
-     * 设置cookie
-     * @param $key
-     * @param $value
-     * @param int $expire
-     * @param string $path
-     * @param null $domain
+     * Set a cookie on the response.
+     * @param string $key    Cookie name
+     * @param string $value  Cookie value
+     * @param int    $expire Lifetime in seconds (default 86400)
+     * @param string $path   Cookie path
+     * @param string $domain Cookie domain
      */
-    public function setCookie($key, $value, $expire = 86400, $path = '/', $domain = null)
+    public function setCookie(string $key, string $value, int $expire = 86400, string $path = '/', string $domain = ''): void
     {
         setcookie($key, $value, time() + $expire, $path, $domain);
     }
 
     /**
-     * 获取对应csrfToken
-     * @return null|string
+     * Generate (or refresh) the CSRF token cookie pair for the current request.
+     * @return string|null The masked CSRF token
      */
     public function createCsrfToken()
     {
@@ -249,9 +507,9 @@ EOF;
             $this->csrfToken = $this->createCsrfCookie($trueToken);
             $trueKey = $this->trueTokenKey;
             $csrfKey = $this->csrfTokenKey;
-            $payload = json_encode([$trueKey, $trueToken]);
+            $payload = (string) json_encode([$trueKey, $trueToken]);
             $this->setCookie($trueKey, $this->hashData($payload, $this->getCsrfKey()));
-            $this->setCookie($csrfKey, $this->csrfToken);
+            $this->setCookie($csrfKey, $this->csrfToken ?? '');
         }
         return $this->csrfToken;
     }
@@ -265,21 +523,29 @@ EOF;
     private function getCsrfKey(): string
     {
         $secret = getenv('APP_SECRET');
-        return $secret ?: 'plumephp-csrf-fallback-key';
+        if (!$secret) {
+            $env = defined('PLUME_PHP_ENV') ? constant('PLUME_PHP_ENV') : (C('PLUME_PHP_ENV') ?: '');
+            if ($env !== 'testing') {
+                throw new \RuntimeException(
+                    'APP_SECRET environment variable must be set to enable CSRF protection. '
+                    . 'Add APP_SECRET=<random-32-char-string> to your .env file.'
+                );
+            }
+            return 'plumephp-csrf-testing-key';
+        }
+        if (strlen($secret) < 16) {
+            throw new \RuntimeException('APP_SECRET must be at least 16 characters long.');
+        }
+        return $secret;
     }
 
-    /**
-     * @param $token
-     * @return string
-     */
-    private function createCsrfCookie($token)
+    private function createCsrfCookie(string $token): string
     {
-        $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-.';
-        $mask = substr(str_shuffle(str_repeat($chars, 5)), 0, 8);
+        $mask = random_bytes(8);
         return str_replace('+', '.', base64_encode($mask . $this->xorTokens($token, $mask)));
     }
 
-    private function xorTokens($token1, $token2)
+    private function xorTokens(string $token1, string $token2): string
     {
         $n1 = mb_strlen($token1, '8bit');
         $n2 = mb_strlen($token2, '8bit');
@@ -292,8 +558,8 @@ EOF;
     }
 
     /**
-     * 获取csrf
-     * @return null
+     * Return the current CSRF token value.
+     * @return string|null
      */
     public function getCsrfToken()
     {
@@ -301,17 +567,18 @@ EOF;
     }
 
     /**
-     * 获取随机字符串
-     * @param int $len
+     * Generate a random hex string for use as a CSRF token.
+     * @param int $len Token length in characters
      * @return string
      */
     private function generateCsrf(int $len = 32): string
     {
-        return substr(bin2hex(random_bytes($len)), 0, $len);
+        return substr(bin2hex(random_bytes(max(1, $len))), 0, $len);
     }
 
     /**
-     * 验证csrfToken
+     * Validate the CSRF token submitted with the current request.
+     * @return bool True if valid (or if the request method does not require validation)
      */
     public function validateCsrfToken()
     {
@@ -333,7 +600,7 @@ EOF;
         }
 
         $cookieValue = $_COOKIE[$trueToken];
-        $hashLength = mb_strlen(hash_hmac('sha256', '', ''), '8bit');
+        $hashLength = 64; // SHA-256 HMAC hex output is always 64 bytes
         $storedHash = mb_substr($cookieValue, 0, $hashLength, '8bit');
         $rawPayload = mb_substr($cookieValue, $hashLength, mb_strlen($cookieValue, '8bit'), '8bit');
         $expectedHash = hash_hmac('sha256', $rawPayload, $this->getCsrfKey());
@@ -365,11 +632,12 @@ EOF;
         return $token === $trueToken;
     }
 
-    protected function beforeRun()
+    protected function beforeRun(): bool
     {
         return true;
     }
-    protected function afterRun($result)
+
+    protected function afterRun(mixed $result): mixed
     {
         return $result;
     }

@@ -4,16 +4,16 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 require_once __DIR__.'/classes/Hello.php';
 
-class DispatcherTest extends PHPUnit_Framework_TestCase
+class DispatcherTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeEvent
      */
     private $dispatcher;
-    function setUp(){
+    public function setUp(): void {
         $this->dispatcher = new PlumeEvent();
     }
 
@@ -80,7 +80,8 @@ class DispatcherTest extends PHPUnit_Framework_TestCase
     // Test an invalid callback
     public function testInvalidCallback()
     {
-        $this->setExpectedException('Exception', 'Invalid callback specified.');
+        $this->expectException(\Exception::class);
+        $this->expectExceptionMessage('The class NonExistentClass does not exists!');
         $this->dispatcher->execute(array('NonExistentClass', 'nonExistentMethod'));
     }
 }

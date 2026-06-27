@@ -4,11 +4,11 @@
  */
 
 // 加载框架文件
-require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'PlumePHP.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'library' . DIRECTORY_SEPARATOR . 'PlumePHP.php';
 
 require_once __DIR__.'/classes/User.php';
 
-class RouterTest extends PHPUnit_Framework_TestCase
+class RouterTest extends \PHPUnit\Framework\TestCase
 {
     /**
      * @var PlumeRouter
@@ -25,7 +25,7 @@ class RouterTest extends PHPUnit_Framework_TestCase
      */
     private $dispatcher;
 
-    public function setUp()
+    public function setUp(): void
     {
         $this->router = new PlumeRouter();
         $this->request = new PlumeRequest();

@@ -24,7 +24,31 @@ php public/index.php -m web -c migrate
 
 > PHP's built-in server is single-process and handles one request at a time. Use it for development and testing only — not suitable for production.
 
----
+2\. Start a development server (no Apache/Nginx/PHP-FPM required).
+
+PlumePHP works out of the box with PHP's built-in web server. The router script
+must be passed so all dynamic routes are dispatched through `public/index.php`.
+
+```bash
+# Recommended — explicit router script required for dynamic routes
+php -S localhost:8000 -t public/ public/index.php
+
+# Use the testing environment (display_errors off, full error_reporting)
+PLUME_PHP_ENV=testing php -S localhost:8000 -t public/ public/index.php
+
+# Or let the framework CLI launch the server (includes port-conflict detection)
+php public/index.php -S
+php public/index.php -S -H 0.0.0.0 -P 9000   # custom host and port
+php public/index.php -S -b                     # run in background
+
+# Run a CLI console command
+php public/index.php -m web -c migrate
+```
+
+> PHP's built-in server is single-process and handles one request at a time.
+> Use it only for development and testing, not production.
+
+3\. Configure your webserver (production).
 
 ## Introduction
 
@@ -34,7 +58,22 @@ PlumePHP is a single-entry, minimal PHP framework designed for rapid development
 
 ## Entry Point
 
-The recommended style uses the static facade — no need to capture `$app` in closures, and before/after filter chains fire correctly:
+```
+server {
+    location / {
+        try_files $uri $uri/ /index.php;
+    }
+}
+```
+4\. Create your `index.php` file.
+
+First include the framework.
+
+```php
+require 'PlumePHP.php';
+```
+
+If you're using Composer, run the autoloader instead.
 
 ```php
 // public/index.php
