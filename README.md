@@ -478,6 +478,131 @@ frankenphp php-server --worker public/worker.php --root public/
 
 ---
 
+## 生产部署（Caddy）
+
+PlumePHP 支持两种 Caddy 部署模式，按需选择。
+
+### 方案一：FrankenPHP + Worker 模式（推荐）
+
+FrankenPHP 将 PHP 嵌入 Caddy，结合 `worker.php` 常驻进程，PHP 只启动一次，请求复用同一进程，无冷启动开销，性能最优。
+
+**Caddyfile：**
+
+```caddyfile
+{
+    frankenphp
+    order php_server before file_server
+}
+
+yourdomain.com {
+    root * /var/www/PlumePHP/public
+
+    tls your@email.com
+
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        X-XSS-Protection "1; mode=block"
+        Referrer-Policy strict-origin-when-cross-origin
+        -Server
+    }
+
+    # 禁止直接访问框架内部目录
+    @blocked {
+        path /library/* /application/* /config/* /storage/* /vendor/* /tests/*
+    }
+    respond @blocked 403
+
+    # 静态资源直接服务，不经 PHP
+    @static {
+        path *.css *.js *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+    }
+    file_server @static
+
+    # PHP Worker 常驻进程模式
+    php_server {
+        worker worker.php
+    }
+}
+```
+
+**启动命令：**
+
+```bash
+# 开发（无 worker，每请求启动一次 PHP）
+frankenphp php-server --root public/
+
+# 生产（worker 常驻进程）
+frankenphp php-server --worker public/worker.php --root public/
+
+# 通过 Caddyfile 启动
+frankenphp run --config /etc/caddy/Caddyfile
+```
+
+### 方案二：Caddy + PHP-FPM
+
+适合已有 PHP-FPM 环境，或不想引入 FrankenPHP 的场景。
+
+**Caddyfile：**
+
+```caddyfile
+yourdomain.com {
+    root * /var/www/PlumePHP/public
+
+    tls your@email.com
+
+    header {
+        X-Frame-Options DENY
+        X-Content-Type-Options nosniff
+        -Server
+    }
+
+    # 禁止直接访问框架内部目录
+    @blocked {
+        path /library/* /application/* /config/* /storage/* /vendor/* /tests/*
+    }
+    respond @blocked 403
+
+    # 静态资源直接服务，不经 PHP
+    @static {
+        path *.css *.js *.png *.jpg *.jpeg *.gif *.ico *.svg *.woff *.woff2 *.ttf *.eot
+    }
+    file_server @static
+
+    # 所有其他请求经 index.php 调度
+    php_fastcgi unix//run/php/php8.2-fpm.sock {
+        index index.php
+        env HTTP_MOD_REWRITE On
+    }
+
+    file_server
+}
+```
+
+### 注意事项
+
+**日志目录权限：**
+
+```bash
+mkdir -p storage/log
+chown -R www-data:www-data storage/
+chmod -R 755 storage/
+```
+
+**虚拟目录（子路径部署）：** 若部署在子路径（如 `/app`），需在 `config/config.php` 设置 `'VDNAME' => 'app'`，并在 Caddyfile 中对应路由块内添加 `uri strip_prefix /app`。
+
+**环境变量注入：** 数据库等配置推荐通过 `.env` 文件传入（`PlumeDotEnv` 内置支持）；也可在 PHP-FPM 模式下通过 `php_fastcgi` 的 `env` 指令注入。
+
+**两种方案对比：**
+
+| | FrankenPHP + worker.php | Caddy + PHP-FPM |
+|---|---|---|
+| PHP 启动开销 | 一次（进程常驻） | 每请求（取决于 FPM 配置） |
+| 部署复杂度 | 低（单二进制） | 中（两个服务） |
+| 适用场景 | 高并发、低延迟 | 稳健通用 |
+
+---
+
 ## 全局辅助函数
 
 | 函数 | 说明 |
