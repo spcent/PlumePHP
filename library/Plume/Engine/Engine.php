@@ -147,6 +147,14 @@ class PlumeEngine
             // session for every request after calling resetForWorker().
             if (!IS_CLI && true === C('USE_SESSION') && PHP_SESSION_NONE === session_status()
                 && !headers_sent()) {
+                $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                    || (($_SERVER['SERVER_PORT'] ?? '') === '443');
+                ini_set('session.cookie_httponly', '1');
+                ini_set('session.use_strict_mode', '1');
+                ini_set('session.cookie_samesite', 'Lax');
+                if ($isHttps) {
+                    ini_set('session.cookie_secure', '1');
+                }
                 session_start();
             }
 
@@ -535,20 +543,16 @@ class PlumeEngine
         }
 
         if ('production' === $this->get('plumephp.env')) {
-            $msg = sprintf(
-                '<h1>500 Internal Server Error</h1>'.
-                '<h3>%s (%s)</h3>',
-                $e->getMessage(),
-                $e->getCode()
-            );
+            $msg = '<h1>500 Internal Server Error</h1>'
+                . '<p>An unexpected error occurred. Please try again later.</p>';
         } else {
             $msg = sprintf(
                 '<h1>500 Internal Server Error</h1>'.
                 '<h3>%s (%s)</h3>'.
                 '<pre>%s</pre>',
-                $e->getMessage(),
-                $e->getCode(),
-                $e->getTraceAsString()
+                htmlspecialchars($e->getMessage(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                htmlspecialchars((string) $e->getCode(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                htmlspecialchars($e->getTraceAsString(), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             );
         }
 
@@ -690,10 +694,17 @@ class PlumeEngine
             throw new \Exception('Wrong parameter format, missing path');
         }
 
-        // Special character processing
-        $bizPath = str_replace('..', '', (string) $bizPathRaw);
-        $bizPath = str_replace('/', '', $bizPath);
-        $bizPath = str_replace('\\', '', $bizPath);
+        // Validate path using a whitelist: only alphanumerics, underscores, hyphens, and dots
+        $bizPath = (string) $bizPathRaw;
+        if (!preg_match('/^[a-zA-Z0-9_\-\.]+$/', $bizPath)) {
+            throw new \Exception('Wrong parameter format, invalid characters in path');
+        }
+        // Prevent path traversal segments
+        foreach (explode('.', $bizPath) as $segment) {
+            if ($segment === '' || $segment === '..') {
+                throw new \Exception('Wrong parameter format, invalid path segment');
+            }
+        }
         $names = explode('.', $bizPath, 20);
         $count = count($names);
         if ($count < 2) {

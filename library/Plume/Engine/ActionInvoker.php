@@ -44,7 +44,32 @@ class ActionInvoker
      */
     public static function sanitizeForLog(array $request): array
     {
-        static $sensitive = ['password', 'passwd', 'pass', 'token', 'secret', 'card_no', 'cvv'];
-        return array_diff_key($request, array_flip($sensitive));
+        static $sensitive = [
+            // Credentials
+            'password', 'passwd', 'pass', 'pwd', 'new_password', 'old_password', 'confirm_password',
+            // Tokens & keys
+            'token', 'secret', 'api_key', 'apikey', 'access_token', 'refresh_token',
+            'auth_token', 'session_token', 'csrf_token', 'plume_csrf',
+            // Payment
+            'card_no', 'card_number', 'cvv', 'cvc', 'expiry', 'bank_account', 'bank_card',
+            // PII
+            'id_card', 'id_number', 'ssn', 'social_security', 'passport', 'license_number',
+            'phone', 'mobile', 'email', 'birthday', 'date_of_birth',
+            // Private keys
+            'private_key', 'encryption_key', 'signing_key',
+        ];
+        $result = array_diff_key($request, array_flip($sensitive));
+        // Also redact any key containing these substrings (case-insensitive)
+        $patterns = ['pass', 'secret', 'token', 'key', 'card', 'cvv', 'ssn', 'id_card'];
+        foreach ($result as $k => $v) {
+            $lower = strtolower((string) $k);
+            foreach ($patterns as $pattern) {
+                if (str_contains($lower, $pattern)) {
+                    $result[$k] = '***REDACTED***';
+                    break;
+                }
+            }
+        }
+        return $result;
     }
 }

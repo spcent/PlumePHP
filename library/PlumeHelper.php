@@ -128,22 +128,30 @@ class PlumeHelper
 
     public static function redirect(string $url, int $time = 0, string $msg = ''): never
     {
-        $url = str_replace(["\n", "\r"], '', $url);
+        $url = str_replace(["\n", "\r", "\0"], '', $url);
+
+        // Block javascript: and data: URIs which cannot be safe redirect targets
+        if (preg_match('/^\s*(?:javascript|data|vbscript):/i', $url)) {
+            $url = '/';
+        }
+
         if (empty($msg)) {
-            $msg = "系统将在{$time}秒之后自动跳转到{$url}！";
+            $escapedUrl = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $msg        = "系统将在{$time}秒之后自动跳转到{$escapedUrl}！";
         }
         if (!headers_sent()) {
             if (0 === $time) {
                 header('Location: ' . $url);
             } else {
                 header("refresh:{$time};url={$url}");
-                echo $msg;
+                echo htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             }
             exit();
         } else {
-            $str = "<meta http-equiv='Refresh' content='{$time};URL={$url}'>";
+            $safeUrl = htmlspecialchars($url, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            $str     = "<meta http-equiv='Refresh' content='{$time};URL={$safeUrl}'>";
             if ($time != 0) {
-                $str .= $msg;
+                $str .= htmlspecialchars($msg, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             }
             exit($str);
         }
@@ -245,7 +253,7 @@ class PlumeHelper
                 $tmp[] = $k . '=' . $v;
             }
         }
-        return md5(implode('&', $tmp) . '&key=' . $key);
+        return hash_hmac('sha256', implode('&', $tmp), $key);
     }
 
     public static function htmlFilter(string $html): string
@@ -260,56 +268,56 @@ class PlumeHelper
     }
 
     /**
-     * @deprecated since PlumePHP 1.4.0 — uses MD5-based RC4 stream cipher (Discuz legacy).
-     *   Replace with sodium_crypto_secretbox() or openssl_encrypt('AES-256-GCM', ...).
-     *   This function will be removed in a future major version.
+     * Encrypt or decrypt a string using AES-256-GCM (authenticated encryption).
+     *
+     * Encoding: base64url(nonce[12] + tag[16] + ciphertext) for ENCODE,
+     * or the same layout for DECODE.
+     *
+     * The $expiry parameter is embedded as a 10-digit Unix timestamp prefix
+     * inside the plaintext (0 = no expiry), preserving backward-compatible
+     * semantics with the legacy RC4-based implementation this replaced.
+     *
+     * @param string $string    Plaintext (ENCODE) or ciphertext (DECODE)
+     * @param string $operation 'ENCODE' or 'DECODE'
+     * @param string $key       Secret key (min 16 chars); falls back to APP_SECRET
+     * @param int    $expiry    Seconds until the token expires (0 = forever)
+     * @return string Ciphertext on ENCODE, plaintext on DECODE, '' on failure
      */
     public static function authcode(string $string, string $operation = 'DECODE', string $key = '', int $expiry = 0): string
     {
-        $ckeyLength = 4;
-        $key        = md5($key ?: 'plumephp');
-        $keya       = md5(substr($key, 0, 16));
-        $keyb       = md5(substr($key, 16, 16));
-        // @phpstan-ignore-next-line ($ckeyLength is intentionally a constant 4 here)
-        $keyc       = $ckeyLength
-            ? ($operation == 'DECODE' ? substr($string, 0, $ckeyLength) : substr(md5(microtime()), -$ckeyLength))
-            : '';
-        $cryptkey   = $keya . md5($keya . $keyc);
-        $keyLength  = strlen($cryptkey);
-        $string     = $operation == 'DECODE'
-            ? base64_decode(substr($string, $ckeyLength))
-            : sprintf('%010d', $expiry ? $expiry + time() : 0) . substr(md5($string . $keyb), 0, 16) . $string;
-        $stringLength = strlen($string);
-        $result = '';
-        $box    = range(0, 255);
-        $rndkey = [];
-        for ($i = 0; $i <= 255; $i++) {
-            $rndkey[$i] = ord($cryptkey[$i % $keyLength]);
-        }
-        for ($j = $i = 0; $i < 256; $i++) {
-            $j       = ($j + $box[$i] + $rndkey[$i]) % 256;
-            $tmp     = $box[$i];
-            $box[$i] = $box[$j];
-            $box[$j] = $tmp;
-        }
-        for ($a = $j = $i = 0; $i < $stringLength; $i++) {
-            $a       = ($a + 1) % 256;
-            $j       = ($j + $box[$a]) % 256;
-            $tmp     = $box[$a];
-            $box[$a] = $box[$j];
-            $box[$j] = $tmp;
-            $result .= chr((int)(ord($string[$i]) ^ ($box[($box[$a] + $box[$j]) % 256])));
-        }
-        if ($operation == 'DECODE') {
-            $expireTs = (int) substr($result, 0, 10);
-            if (($expireTs === 0 || $expireTs - time() > 0)
-                && substr($result, 10, 16) == substr(md5(substr($result, 26) . $keyb), 0, 16)
-            ) {
-                return substr($result, 26);
+        $rawKey = $key ?: (string) getenv('APP_SECRET') ?: 'plumephp-insecure-fallback-key!!';
+        // Derive a 256-bit key via SHA-256 so any key length is accepted safely
+        $derivedKey = hash('sha256', $rawKey, true);
+
+        if (strtoupper($operation) === 'ENCODE') {
+            $expireTs  = $expiry > 0 ? sprintf('%010d', time() + $expiry) : '0000000000';
+            $plaintext = $expireTs . $string;
+            $nonce     = random_bytes(12);
+            $tag       = '';
+            $cipher    = openssl_encrypt($plaintext, 'aes-256-gcm', $derivedKey, OPENSSL_RAW_DATA, $nonce, $tag, '', 16);
+            if ($cipher === false) {
+                return '';
             }
+            return rtrim(strtr(base64_encode($nonce . $tag . $cipher), '+/', '-_'), '=');
+        }
+
+        // DECODE
+        $raw = base64_decode(strtr($string, '-_', '+/') . str_repeat('=', (4 - strlen($string) % 4) % 4), true);
+        if ($raw === false || strlen($raw) < 29) { // 12 nonce + 16 tag + 1 min payload
             return '';
         }
-        return $keyc . str_replace('=', '', base64_encode($result));
+        $nonce  = substr($raw, 0, 12);
+        $tag    = substr($raw, 12, 16);
+        $cipher = substr($raw, 28);
+        $plain  = openssl_decrypt($cipher, 'aes-256-gcm', $derivedKey, OPENSSL_RAW_DATA, $nonce, $tag);
+        if ($plain === false) {
+            return '';
+        }
+        $expireTs = (int) substr($plain, 0, 10);
+        if ($expireTs !== 0 && $expireTs < time()) {
+            return '';
+        }
+        return substr($plain, 10);
     }
 
     // -----------------------------------------------------------------------
@@ -335,10 +343,20 @@ class PlumeHelper
 
     public static function uuid(string $prefix = ''): string
     {
-        $time  = md5(microtime());
-        $rand1 = md5(substr($time, rand(0, 10), rand(22, 32)));
-        $rand2 = md5(substr($rand1, rand(0, 10), rand(22, 32)));
-        return strtolower(md5($prefix . uniqid($prefix) . $time . $rand1 . $rand2));
+        $bytes = random_bytes(16);
+        // Set version 4 (random) and variant bits per RFC 4122
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+        $hex = bin2hex($bytes);
+        $uuid = sprintf(
+            '%s-%s-%s-%s-%s',
+            substr($hex, 0, 8),
+            substr($hex, 8, 4),
+            substr($hex, 12, 4),
+            substr($hex, 16, 4),
+            substr($hex, 20, 12)
+        );
+        return $prefix ? $prefix . '-' . $uuid : $uuid;
     }
 
     public static function strcut(string $str, int $len, string $ext = '', int $zhLen = 0): string
