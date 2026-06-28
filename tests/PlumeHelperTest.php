@@ -94,16 +94,25 @@ class PlumeHelperTest extends \PHPUnit\Framework\TestCase
     // Data / String
     // -----------------------------------------------------------------------
 
-    public function testUuidIsLowerHex(): void
+    public function testUuidIsRfc4122(): void
     {
         $id = PlumeHelper::uuid();
-        $this->assertMatchesRegularExpression('/^[0-9a-f]+$/', $id);
+        // RFC 4122 v4 format: xxxxxxxx-xxxx-4xxx-[89ab]xxx-xxxxxxxxxxxx
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
+            $id
+        );
     }
 
     public function testUuidWithPrefix(): void
     {
         $id = PlumeHelper::uuid('usr');
-        $this->assertMatchesRegularExpression('/^[0-9a-f]+$/', $id);
+        $this->assertStringStartsWith('usr-', $id);
+        $uuid = substr($id, 4);
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
+            $uuid
+        );
     }
 
     public function testStrcut(): void

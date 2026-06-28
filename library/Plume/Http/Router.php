@@ -154,7 +154,7 @@ class PlumeRouter
         }
         $cacheDir = dirname($this->cacheFile);
         if (!is_dir($cacheDir)) {
-            mkdir($cacheDir, 0755, true);
+            mkdir($cacheDir, 0700, true);
         }
         $tmp = $this->cacheFile . '.' . getmypid() . '.tmp';
         file_put_contents(

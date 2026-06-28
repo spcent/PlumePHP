@@ -36,7 +36,7 @@ class PlumeLogger implements \Psr\Log\LoggerInterface
             $this->logPath = C('PLUME_LOG_PATH') ?: LOG_PATH;
         }
         if (!is_dir($this->logPath)) {
-            mkdir($this->logPath, 0755, true);
+            mkdir($this->logPath, 0700, true);
         }
 
         // Flush buffered DEBUG/INFO/NOTICE logs on shutdown so fatal errors

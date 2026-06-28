@@ -135,7 +135,7 @@ class PlumeView
             ? $this->getCompiledTemplate($this->content)
             : $this->content;
 
-        extract($this->vars);
+        extract($this->vars, EXTR_SKIP);
         if ('' === $layout || false === $layout) {
             include $includeFile;
         } else {

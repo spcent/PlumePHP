@@ -196,8 +196,8 @@ abstract class Action
 
         $this->csrfToken = $this->getCookie($this->csrfTokenKey);
         if ($this->csrfValidate && C('PLUME_PHP_ENV') !== 'testing' && !$this->validateCsrfToken()) {
-            header('HTTP/1.1 401 Unauthorized');
-            $this->error("Unauthorized");
+            header('HTTP/1.1 403 Forbidden');
+            $this->error("Forbidden");
         }
 
         $this->createCsrfToken();
@@ -485,15 +485,35 @@ EOF;
 
     /**
      * Set a cookie on the response.
-     * @param string $key    Cookie name
-     * @param string $value  Cookie value
-     * @param int    $expire Lifetime in seconds (default 86400)
-     * @param string $path   Cookie path
-     * @param string $domain Cookie domain
+     * @param string $key      Cookie name
+     * @param string $value    Cookie value
+     * @param int    $expire   Lifetime in seconds (default 86400)
+     * @param string $path     Cookie path
+     * @param string $domain   Cookie domain
+     * @param bool   $httpOnly Prevent JavaScript access (default true)
+     * @param bool   $secure   Transmit over HTTPS only (default auto-detected)
+     * @param string $sameSite SameSite policy: 'Strict', 'Lax', or 'None' (default 'Lax')
      */
-    public function setCookie(string $key, string $value, int $expire = 86400, string $path = '/', string $domain = ''): void
-    {
-        setcookie($key, $value, time() + $expire, $path, $domain);
+    public function setCookie(
+        string $key,
+        string $value,
+        int $expire = 86400,
+        string $path = '/',
+        string $domain = '',
+        bool $httpOnly = true,
+        bool $secure = false,
+        string $sameSite = 'Lax'
+    ): void {
+        $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (($_SERVER['SERVER_PORT'] ?? '') === '443');
+        setcookie($key, $value, [
+            'expires'  => time() + $expire,
+            'path'     => $path,
+            'domain'   => $domain,
+            'secure'   => $secure || $isHttps,
+            'httponly' => $httpOnly,
+            'samesite' => $sameSite,
+        ]);
     }
 
     /**
@@ -629,7 +649,7 @@ EOF;
             $mask = str_pad($mask, $n2, $n1 === 0 ? ' ' : $mask);
         }
         $token = $mask ^ $token;
-        return $token === $trueToken;
+        return hash_equals($trueToken, $token);
     }
 
     protected function beforeRun(): bool
