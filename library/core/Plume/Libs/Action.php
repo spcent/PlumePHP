@@ -485,14 +485,14 @@ EOF;
 
     /**
      * Set a cookie on the response.
-     * @param string $key      Cookie name
-     * @param string $value    Cookie value
-     * @param int    $expire   Lifetime in seconds (default 86400)
-     * @param string $path     Cookie path
-     * @param string $domain   Cookie domain
-     * @param bool   $httpOnly Prevent JavaScript access (default true)
-     * @param bool   $secure   Transmit over HTTPS only (default auto-detected)
-     * @param string $sameSite SameSite policy: 'Strict', 'Lax', or 'None' (default 'Lax')
+     * @param string                            $key      Cookie name
+     * @param string                            $value    Cookie value
+     * @param int                               $expire   Lifetime in seconds (default 86400)
+     * @param string                            $path     Cookie path
+     * @param string                            $domain   Cookie domain
+     * @param bool                              $httpOnly Prevent JavaScript access (default true)
+     * @param bool                              $secure   Transmit over HTTPS only (default auto-detected)
+     * @param 'Lax'|'lax'|'Strict'|'strict'|'None'|'none' $sameSite SameSite policy (default 'Lax')
      */
     public function setCookie(
         string $key,
@@ -506,14 +506,18 @@ EOF;
     ): void {
         $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
             || (($_SERVER['SERVER_PORT'] ?? '') === '443');
-        setcookie($key, $value, [
+        /** @var array{expires: int, path: string, domain: string, secure: bool, httponly: bool, samesite: 'Lax'|'lax'|'Strict'|'strict'|'None'|'none'} $options */
+        $options = [
             'expires'  => time() + $expire,
             'path'     => $path,
             'domain'   => $domain,
             'secure'   => $secure || $isHttps,
             'httponly' => $httpOnly,
-            'samesite' => $sameSite,
-        ]);
+            'samesite' => in_array($sameSite, ['Lax', 'lax', 'Strict', 'strict', 'None', 'none'], true)
+                ? $sameSite
+                : 'Lax',
+        ];
+        setcookie($key, $value, $options);
     }
 
     /**
